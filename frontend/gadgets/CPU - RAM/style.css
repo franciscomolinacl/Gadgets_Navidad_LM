@@ -1,0 +1,40 @@
+body {
+	margin: 0;
+	background: rgba(0,0,0,0.50);
+	font-family: sans-serif;
+	color: white;
+	overflow: hidden;
+}
+
+#container {
+	padding: 10px;
+	width: 100%;
+}
+
+.section {
+	margin-bottom: 20px;
+}
+
+.label {
+	font-size: 14px;
+}
+
+.bar {
+	width: 100%;
+	height: 12px;
+	background: rgba(255,255,255,0.25);
+	border-radius: 10px;
+	overflow: hidden;
+	margin-top: 5px;
+}
+
+.fill {
+	height: 100%;
+	width: 0%;
+	background: rgba(0,255,0,0.7);
+	transition: width 0.2s linear;
+}
+
+.value {
+	font-size: 13px;
+}

@@ -1,0 +1,25 @@
+#xmas-lights {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	pointer-events: none;
+	z-index: 999999;
+}
+
+.bulb {
+	width: 12px;
+	height: 12px;
+	border-radius: 50%;
+	position: absolute;
+	animation: glow 3s infinite alternate ease-in-out;
+	opacity: 0.9;
+}
+
+@keyframes glow {
+	0%   { background: red;    box-shadow: 0 0 10px red; }
+	33%  { background: green;  box-shadow: 0 0 10px green; }
+	66%  { background: blue;   box-shadow: 0 0 10px blue; }
+	100% { background: gold;   box-shadow: 0 0 10px gold; }
+}

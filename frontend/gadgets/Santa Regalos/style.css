@@ -1,0 +1,160 @@
+.santa-container {
+    position: fixed;
+    bottom: 20px;
+    left: -120px;
+    width: 100px;
+    height: 150px;
+    animation: moveSanta 8s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes moveSanta {
+    0% { transform: translateX(-150px); }
+    100% { transform: translateX(calc(100vw + 150px)); }
+}
+
+.santa {
+    position: relative;
+    width: 80px;
+    height: 120px;
+}
+
+.head {
+    position: absolute;
+    top: 0;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+    background: #f4d1b5;
+    border-radius: 50%;
+}
+
+.hat {
+    position: absolute;
+    top: -20px;
+    width: 50px;
+    height: 25px;
+    background: red;
+    border-radius: 50% 50% 0 0;
+    left: -5px;
+}
+
+.hat::after {
+    content: "";
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    background: white;
+    border-radius: 50%;
+    right: 0;
+    top: 0;
+}
+
+.beard {
+    position: absolute;
+    bottom: -10px;
+    left: -5px;
+    width: 50px;
+    height: 30px;
+    background: white;
+    border-radius: 0 0 50% 50%;
+}
+
+.arms {
+    position: absolute;
+    top: 45px;
+    left: 5px;
+    width: 70px;
+    height: 40px;
+}
+
+.arm {
+    width: 15px;
+    height: 30px;
+    background: red;
+    border-radius: 10px;
+    position: absolute;
+    transform-origin: top center;
+    top: 0;
+}
+
+.arm.left {
+    left: 0;
+    transform: rotate(10deg);
+}
+
+.arm.right {
+    right: 0;
+    animation: throwArm 1s infinite;
+}
+
+@keyframes throwArm {
+    0%, 60% { transform: rotate(-10deg); }
+    70%     { transform: rotate(20deg); }
+    100%    { transform: rotate(-10deg); }
+}
+
+.body {
+    position: absolute;
+    top: 40px;
+    left: 10px;
+    width: 60px;
+    height: 50px;
+    background: red;
+    border-radius: 10px;
+}
+
+.belt {
+    position: absolute;
+    top: 70px;
+    left: 10px;
+    width: 60px;
+    height: 10px;
+    background: black;
+}
+
+.legs {
+    position: absolute;
+    top: 80px;
+    left: 20px;
+    width: 40px;
+    height: 40px;
+}
+
+.leg {
+    width: 15px;
+    height: 35px;
+    background: red;
+    position: absolute;
+    bottom: 0;
+    border-radius: 5px;
+    transform-origin: top center;
+    animation: walk 0.4s infinite alternate ease-in-out;
+}
+
+.left { left: 0; }
+
+.right {
+    right: 0;
+    animation-delay: 0.2s;
+}
+
+@keyframes walk {
+    0% { transform: rotate(15deg); }
+    100% { transform: rotate(-20deg); }
+}
+
+.gift {
+    position: fixed;
+    width: 20px;
+    height: 20px;
+    background: #ff0000;
+    border: 3px solid gold;
+    border-radius: 3px;
+    animation: fallGift 1.5s linear forwards;
+}
+
+@keyframes fallGift {
+    0% { transform: translateY(0); opacity: 1; }
+    100% { transform: translateY(300px); opacity: 0; }
+}

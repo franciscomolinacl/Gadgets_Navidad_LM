@@ -1,0 +1,16 @@
+#tree {
+	position: fixed;
+	bottom: 20px;
+	right: 20px;
+	width: 90px;
+	height: 120px;
+	background: url("tree.png") no-repeat center/contain;
+	animation: breathe 3s ease-in-out infinite;
+	pointer-events: none;
+	z-index: 99999;
+}
+
+@keyframes breathe {
+	0%,100% { transform: scale(1); }
+	50% { transform: scale(1.06); }
+}

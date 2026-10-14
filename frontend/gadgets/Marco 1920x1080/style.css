@@ -1,0 +1,14 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+#marco {
+    width: 1920px;
+    height: 1080px;
+    background-image: url("marco.png");
+    background-repeat: no-repeat;
+    background-position: 0 0;
+}

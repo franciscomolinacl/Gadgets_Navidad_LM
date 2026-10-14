@@ -1,0 +1,67 @@
+html, body {
+	height: 350px;
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background: #fff59d;
+	font-family: sans-serif;
+}
+
+#sticky-title {
+	height: 22px;
+	background: rgba(0,0,0,0.4);
+	color: white;
+	padding-left: 8px;
+	font-size: 14px;
+	line-height: 22px;
+	user-select: none;
+	border-top-left-radius: 6px;
+	border-top-right-radius: 6px;
+}
+
+#note-container {
+	position: absolute;
+	top: 22px;
+	left: 0;
+	width: 100%;
+	height: 328px;
+	overflow: hidden;
+}
+
+#note {
+	width: 100%;
+	border: none;
+	outline: none;
+	resize: none;
+	background: transparent;
+	padding: 10px;
+	font-size: 16px;
+	box-sizing: border-box;
+	overflow-x: hidden;
+	overflow-y: hidden;
+}
+
+#note::-webkit-scrollbar {
+	width: 10px;
+}
+
+#note::-webkit-scrollbar-track {
+	background: #fff9b0;
+	border-radius: 10px;
+}
+
+#note::-webkit-scrollbar-thumb {
+	background: #f1c40f;
+	border-radius: 10px;
+	border: 2px solid #fff9b0;
+}
+
+#note::-webkit-scrollbar-thumb:hover {
+	background: #d4ac0d;
+}
+
+#note::-webkit-scrollbar,
+#note::-webkit-scrollbar-thumb,
+#note::-webkit-scrollbar-track {
+	cursor: default !important;
+}

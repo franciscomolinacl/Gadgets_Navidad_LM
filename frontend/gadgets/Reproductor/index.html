@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8">
+		<link rel="stylesheet" href="style.css">
+		<title>Reproductor musica</title>
+	</head>
+	<body>
+		<div class="player-card">
+
+			<div class="cover-wrapper">
+				<img id="cover" class="cover-img" src="" alt="cover">
+			</div>
+
+			<div class="song-info">
+				<div class="song-name">
+					<span id="song-name"></span>
+				</div>
+
+				<div class="visualizer" id="visualizer"></div>
+
+				<input type="range" id="progress" min="0" max="100" value="0" class="progress-bar">
+
+				<div class="controls">
+					<button class="ctrl" id="prevBtn">
+						<svg viewBox="0 0 24 24"><path d="M18 6l-8.5 6 8.5 6V6zm-11 0v12H5V6h2z"/></svg>
+					</button>
+
+					<button class="ctrl" id="playBtn">
+						<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+					</button>
+
+					<button class="ctrl" id="pauseBtn">
+						<svg viewBox="0 0 24 24"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+					</button>
+
+					<button class="ctrl" id="stopBtn">
+						<svg viewBox="0 0 24 24"><path d="M6 6h12v12H6z"/></svg>
+					</button>
+
+					<button class="ctrl" id="nextBtn">
+						<svg viewBox="0 0 24 24"><path d="M6 6v12l8.5-6L6 6zm9 0v12h2V6h-2z"/></svg>
+					</button>
+
+					<button class="ctrl" id="randomBtn">
+						<svg viewBox="-4 -4 24 24">
+							<path fill-rule="evenodd" d="M0 3.5A.5.5 0 0 1 .5 3H1c2.202 0 3.827 1.24 4.874 2.418.49.552.865 1.102 1.126 1.532.26-.43.636-.98 1.126-1.532C9.173 4.24 10.798 3 13 3v1c-1.798 0-3.173 1.01-4.126 2.082A9.6 9.6 0 0 0 7.556 8a9.6 9.6 0 0 0 1.317 1.918C9.828 10.99 11.204 12 13 12v1c-2.202 0-3.827-1.24-4.874-2.418A10.6 10.6 0 0 1 7 9.05c-.26.43-.636.98-1.126 1.532C4.827 11.76 3.202 13 1 13H.5a.5.5 0 0 1 0-1H1c1.798 0 3.173-1.01 4.126-2.082A9.6 9.6 0 0 0 6.444 8a9.6 9.6 0 0 0-1.317-1.918C4.172 5.01 2.796 4 1 4H.5a.5.5 0 0 1-.5-.5"/>
+							<path d="M13 5.466V1.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192m0 9v-3.932a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384l-2.36 1.966a.25.25 0 0 1-.41-.192"/>
+						</svg>
+					</button>
+				</div>
+
+				<div class="bottom-row">
+					<div class="volume-row">
+						<button id="muteBtn" class="mini-btn">🔇</button>
+						<input type="range" id="volume" min="0" max="1" step="0.01" value="1">
+					</div>
+				</div>
+
+			</div>
+
+		</div>
+		<script src="script.js"></script>
+	</body>
+
+</html>

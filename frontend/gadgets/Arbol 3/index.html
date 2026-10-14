@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8">
+		<title>Arbol Navidad 3</title>
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<img id="tree" src="frames/frame1.png" alt="Arbol Navidad">
+
+		<script>
+		const frames = ["frames/frame1.png", "frames/frame2.png", "frames/frame3.png"];
+		let index = 0;
+
+		setInterval(() => {
+			index = (index + 1) % frames.length;
+			document.getElementById("tree").src = frames[index];
+		}, 300);
+		</script>
+	</body>
+</html>

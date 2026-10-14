@@ -1,0 +1,47 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    background: transparent;
+}
+
+#container {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+}
+
+.firefly {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: rgba(255,240,150,0.9);
+    box-shadow: 0 0 10px 6px rgba(255,240,150,0.7);
+    animation: flicker 1.5s infinite ease-in-out alternate;
+    will-change: transform, offset-distance;
+}
+
+.burst {
+    position: absolute;
+    width: 2px;             /* muy pequeño */
+    height: 2px;
+    border-radius: 50%;
+    background: rgba(255,255,200,0.4);  /* suave suave */
+    box-shadow: 0 0 6px 3px rgba(255,255,200,0.3);
+    opacity: 0.7;
+    transform: scale(1);
+    pointer-events: none;
+    animation: burstAnim 0.35s ease-out forwards;
+}
+
+@keyframes burstAnim {
+    0%   { opacity: 0.7; transform: scale(1); }
+    50%  { opacity: 0.3; transform: scale(1.8); }
+    100% { opacity: 0; transform: scale(2.2); }
+}
+
+@keyframes flicker {
+    0%   { opacity: 0.3; }
+    50%  { opacity: 1; }
+    100% { opacity: 0.4; }
+}

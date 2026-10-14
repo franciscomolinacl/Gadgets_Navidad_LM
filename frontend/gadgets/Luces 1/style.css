@@ -1,0 +1,21 @@
+html, body {
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+#lights-container {
+    width: 100vw;
+    height: 65px;
+    overflow: hidden;
+}
+
+#lights {
+    height: 65px; 
+    background-image: url("luces.png");
+    background-repeat: repeat-x;
+    background-position: 0 0;
+    background-size: auto 65px;
+    image-rendering: pixelated;
+}

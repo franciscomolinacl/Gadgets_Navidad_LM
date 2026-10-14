@@ -1,0 +1,56 @@
+html, body {
+	margin: 0;
+	padding: 0;
+	overflow: hidden;
+	background: transparent;
+	font-family: Arial, sans-serif;
+}
+
+.countdown-container {
+	width: 350px;
+	height: 120px;
+	position: fixed;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -50%);
+	padding: 10px 10px;
+	border: 8px solid #c40000;
+	border-radius: 20px;
+	background: rgba(0, 102, 25, 0.8);
+	backdrop-filter: blur(4px);
+	box-shadow: 0 0 20px rgba(255, 0, 0, 0.4);
+}
+
+#countdown {
+	color: #FFD700;
+	font-size: 30px;
+	text-align: center;
+	margin: 8;
+	z-index: 10;
+	position: relative;
+}
+
+.lights {
+	position: absolute;
+	top: -7px;
+	left: -7px;
+	right: -22px;
+	bottom: -22px;
+	border-radius: 28px;
+	pointer-events: none;
+	z-index: 5;
+}
+
+.lights span {
+	position: absolute;
+	width: 15px;
+	height: 15px;
+	border-radius: 50%;
+	box-shadow: 0 0 8px red !important;
+	animation: blink 1.5s infinite ease-in-out;
+}
+
+@keyframes blink {
+	0%,100% { opacity: 0.4; transform: scale(0.9); }
+	50%     { opacity: 1;   transform: scale(1.2); }
+}

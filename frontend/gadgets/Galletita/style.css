@@ -1,0 +1,37 @@
+body {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+#ginger {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 70px;
+    height: 90px;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+    user-select: none;
+    z-index: 9999;
+}
+
+/* caminar */
+#ginger.walk {
+    animation: walk 0.35s infinite;
+}
+@keyframes walk {
+    0% { transform: translate(-50%, -50%) rotate(-3deg); }
+    50% { transform: translate(-50%, -48%) rotate(3deg); }
+    100% { transform: translate(-50%, -50%) rotate(-3deg); }
+}
+
+/* salto */
+#ginger.jump {
+    animation: jump 0.6s ease-out;
+}
+@keyframes jump {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    40% { transform: translate(-50%, -70%) scale(1.1); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}

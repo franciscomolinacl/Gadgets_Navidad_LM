@@ -1,0 +1,27 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DWALM Gadgets Xmas",
+  "version": "2.0.0",
+  "identifier": "cl.franciscomolina.dwalmgadgetsxmas",
+  "build": {
+    "frontendDist": "../frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": []
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage", "zip"],
+    "icon": ["icon.png"],
+    "category": "Utility",
+    "publisher": "Francisco Molina",
+    "copyright": "MIT",
+    "shortDescription": "Gadgets navideños para el escritorio",
+    "linux": {
+      "deb": {
+        "maintainer": "Francisco Molina <contacto@franciscomolina.cl>"
+      }
+    }
+  }
+}

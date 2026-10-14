@@ -1,0 +1,95 @@
+.clock {
+    width: 240px;
+    height: 240px;
+    border-radius: 50%;
+    position: relative;
+    transform: rotate(-90deg);
+
+
+    border: 10px solid rgba(255, 255, 255, 0.7);
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.15); /* semi hielo */
+    backdrop-filter: blur(6px) brightness(1.2);
+    box-shadow:
+        inset 0 0 25px rgba(255, 255, 255, 0.4),
+        inset 0 0 60px rgba(200, 240, 255, 0.35),
+        0 0 25px rgba(150, 220, 255, 0.5);
+   
+}
+
+.hand {
+    position: absolute;
+    width: 50%;
+    height: 6px;
+    background: #FFD700;
+    top: 50%;
+    left: 50%;
+    transform-origin: 0% 50%;
+    transform: rotate(0deg);
+    border-radius: 3px;
+}
+
+.hand.hour {
+    width: 30%;
+    height: 7px;
+}
+
+.hand.minute {
+    width: 40%;
+    height: 5px;
+}
+
+.hand.second {
+    width: 45%;
+    height: 2px;
+    background: red;
+}
+
+.lights {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 280px; 
+    height: 280px;
+    pointer-events: none;
+    z-index: 20;
+}
+
+.light {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: red;
+    box-shadow: 0 0 8px red;
+    animation: blink 1.5s infinite ease-in-out;
+}
+
+@keyframes blink {
+    0%, 100% { opacity: 0.3; transform: scale(0.9); }
+    50%      { opacity: 1;   transform: scale(1.2); }
+}
+
+
+.numbers {
+    position: absolute;
+    width: 240px;
+    height: 240px;
+    top: 0;
+    left: 0;
+    pointer-events: none;
+    z-index: 15;
+}
+
+.number {
+    position: absolute;
+    color: #FFD700;            /* dorado navideño */
+    font-size: 26px;
+    font-weight: bold;
+    text-shadow: 
+        0 0 4px #fff,
+        0 0 8px rgba(255, 255, 200, 0.6),
+        0 0 12px rgba(255, 200, 0, 0.8);
+    transform: translate(-50%, -50%);
+    font-family: "Arial Black", sans-serif;
+}

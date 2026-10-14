@@ -1,0 +1,74 @@
+html, body {
+	margin: 0;
+	padding: 0;
+	background: transparent;
+	overflow: hidden;
+}
+
+#tree-container {
+	margin-top: 20px;
+	width: 250px;
+	height: 300px;
+	position: relative;
+	user-select: none;
+}
+
+#star {
+	position: absolute;
+	top: -10px;
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 45px;
+	color: #fffacd;
+	text-shadow: 0 0 10px #fff, 0 0 25px gold, 0 0 40px yellow;
+	animation: starFlash 1.4s ease-in-out infinite;
+	z-index: 5;
+}
+
+@keyframes starFlash {
+	0%, 100% { transform: translateX(-50%) scale(1); }
+	50% { transform: translateX(-50%) scale(1.15); }
+}
+
+.branch {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	border-radius: 20px;
+	background: linear-gradient(180deg, #0c8a2d, #064d1b);
+	filter: drop-shadow(0 4px 4px rgba(0,0,0,0.6));
+}
+
+.b1 { width: 160px; height: 55px; top: 50px; }
+.b2 { width: 200px; height: 70px; top: 95px; }
+.b3 { width: 230px; height: 80px; top: 145px; }
+
+#trunk {
+	position: absolute;
+	width: 50px;
+	height: 55px;
+	background: #7a4a20;
+	border-radius: 8px;
+	left: 50%;
+	top: 220px;
+	transform: translateX(-50%);
+	box-shadow: inset 0 -4px 6px rgba(0,0,0,0.4);
+}
+
+.light {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	position: absolute;
+	animation: blink 1.2s infinite;
+	z-index: 6;
+}
+
+@keyframes blink {
+	0%, 100% { opacity: 0.3; transform: scale(0.8); }
+	50% { opacity: 1; transform: scale(1.4); }
+}
+
+.red { background: red; box-shadow: 0 0 8px red; }
+.yellow { background: yellow; box-shadow: 0 0 8px yellow; animation-delay: .3s; }
+.blue { background: #66ccff; box-shadow: 0 0 8px #66ccff; animation-delay: .6s; }

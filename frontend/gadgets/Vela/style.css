@@ -1,0 +1,60 @@
+body {
+    margin: 0;
+    background: transparent;
+    overflow: hidden;
+}
+
+#vela-container {
+	width: 70px;
+    padding-top: 50px;
+    position: relative;
+    text-align: center;
+}
+
+/* Cuerpo de la vela */
+#vela {
+    position: relative;
+    width: 30px;
+    height: 70px;
+    margin: 0 auto;
+}
+
+.cera {
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(#ffffff, #ffe0e0);
+    border-radius: 6px;
+    box-shadow: inset 0 0 5px rgba(255, 0, 0, 0.3);
+}
+
+/* Llama */
+.llama {
+    position: absolute;
+    top: -20px;
+    left: 50%;
+    width: 18px;
+    height: 28px;
+    transform: translateX(-50%);
+    background: radial-gradient(ellipse at center, #ffeb8a, #ff7300);
+    border-radius: 50% 50% 40% 40%;
+    opacity: 1;
+    animation: flame 1s infinite ease-in-out;
+    filter: drop-shadow(0 0 7px #ffb000);
+}
+
+/* Animación llama */
+@keyframes flame {
+    0% { transform: translateX(-50%) scale(1); opacity: 0.9; }
+    50% { transform: translateX(-50%) scale(1.1); opacity: 1; }
+    100% { transform: translateX(-50%) scale(1); opacity: 0.9; }
+}
+
+/* Base */
+.base {
+    margin: 5px auto 0;
+    width: 60px;
+    height: 15px;
+    background: #982f00;
+    border-radius: 10px;
+    box-shadow: inset 0 0 5px #5d1b00;
+}
