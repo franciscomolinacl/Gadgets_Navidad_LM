@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capacidad por defecto: panel de control y ventanas de gadgets.",
+  "windows": ["*"],
+  "permissions": ["core:default", "core:window:allow-start-dragging"]
+}
