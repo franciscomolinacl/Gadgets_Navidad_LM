@@ -1,11 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{WebviewUrl, WebviewWindowBuilder};
 
-/// URL de un gadget dentro de frontendDist, con espacios codificados.
+/// URL de un gadget dentro de frontendDist.
+/// Tauri codifica los espacios automáticamente al resolver el asset.
 fn gadget_url(name: &str) -> WebviewUrl {
-    let encoded = name.replace(' ', "%20");
-    WebviewUrl::App(format!("gadgets/{encoded}/index.html").into())
+    WebviewUrl::App(format!("gadgets/{name}/index.html").into())
 }
 
 fn main() {
@@ -19,7 +19,7 @@ fn main() {
                 .transparent(true)
                 .decorations(false)
                 .skip_taskbar(true)
-                .always_on_bottom(true)
+                .always_on_top(true) // TEMP PoC: probar carga de asset
                 .resizable(false)
                 .focused(false)
                 .build()?;

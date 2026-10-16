@@ -12,16 +12,11 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["deb", "appimage", "zip"],
+    "targets": ["deb", "appimage"],
     "icon": ["icon.png"],
     "category": "Utility",
     "publisher": "Francisco Molina",
     "copyright": "MIT",
-    "shortDescription": "Gadgets navideños para el escritorio",
-    "linux": {
-      "deb": {
-        "maintainer": "Francisco Molina <contacto@franciscomolina.cl>"
-      }
-    }
+    "shortDescription": "Gadgets navideños para el escritorio"
   }
 }

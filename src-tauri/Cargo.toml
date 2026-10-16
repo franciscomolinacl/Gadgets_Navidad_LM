@@ -3,7 +3,7 @@ name = "dwalm-gadgets-tauri"
 version = "2.0.0"
 edition = "2021"
 description = "DWALM Gadgets Xmas — gadgets navideños para el escritorio (Tauri)"
-authors = ["Francisco Molina"]
+authors = ["Francisco Molina <contacto@franciscomolina.cl>"]
 license = "MIT"
 
 [[bin]]
