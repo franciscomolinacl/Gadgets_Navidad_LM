@@ -164,7 +164,7 @@ function renderConfig(name, config) {
 		let control;
 
 		if (typeof value === "boolean") {
-			control = document.createElement("span");
+			control = document.createElement("label");
 			control.className = "switch";
 
 			input = document.createElement("input");

@@ -121,3 +121,28 @@ RGB del panel `(21,32,32)` (oscuro = tema nuevo), barra superior oscura, lista a
 la izquierda y filas de config a la derecha. No hay `node`/`jsc`/ImageMagick en
 el equipo; sí `gnome-screenshot` y `python3` + `PIL`.
 
+## Bug: interruptores (switch) que no respondían al clic (2026-10-17)
+
+### Síntoma
+Al hacer clic sobre un switch del panel no se activaba ni se movía nada.
+
+### Causa
+El `<input type="checkbox">` estaba oculto (`opacity:0; width:0; height:0`) y el
+contenedor del switch era un `<span>`. Como un `<span>` **no** es etiqueta
+asociada, el clic sobre el control visible no llegaba al input → no se toggliaba.
+Solo funcionaba si se clickeaba el texto (que sí tenía `label for=`).
+
+### Patrón fiable para switches
+1. El contenedor debe ser un `<label class="switch">` que **envuelva** el input
+   (asociación implícita), o bien:
+2. El input debe **cubrir** todo el switch (`position:absolute; inset:0;
+   width/height:100%` con `opacity:0`), de modo que reciba el clic y togglee
+   nativamente.
+
+Se aplicó ambas cosas (label + input cubriendo el área) para que sea robusto.
+
+### Verificación funcional
+Se localizó el knob gris del switch `#cfd6cf` en una captura con PIL (buscar
+píxeles cercanos a ese color y agruparlos), se clickeó con XTest en su centro y
+se comprobó que el `_active` del gadget pasó a `true` y apareció su ventana.
+
