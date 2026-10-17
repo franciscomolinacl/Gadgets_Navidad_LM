@@ -390,3 +390,29 @@ bordes. Alternativa (no aplicada): fijar tamaño con
   comandos del shell y se autodestruye. Usar `systemctl --user stop gn-daemon`
   (si se lanzo con `systemd-run --unit=gn-daemon`) o la trampa de corchetes
   `pkill -f 'gadgets-navidenos-taur[i]'`.
+
+### Empaquetado (build de release)
+- `cargo tauri build` (desde `src-tauri/`) genera `.deb` y `.AppImage` en
+  `target/release/bundle/{deb,appimage}/`. El tooling de AppImage queda cacheado
+  en `~/.cache/tauri` (~35 MB), asi que builds posteriores no lo descargan.
+- **ICE de rustc al empaquetar** (rustc 1.99.0): `[profile.release]` con
+  `lto = true` + `codegen-units = 1` + `opt-level = 3` revienta compilando `gtk`
+  (`attrs_for_def` / `list_model::ListModelExtManual`) = rust-lang/rust#148191.
+  Workaround confirmado: `lto = false` en `[profile.release]`. Con eso el `.deb`
+  (~20 MB) y el `.AppImage` (~98 MB) se generan sin problema.
+- Antes de empaquetar conviene borrar `src-tauri/target/` (ocupaba ~5.2 GB entre
+  debug+release+bundles); libera espacio y el release se reconstruye limpio.
+
+### Borde del panel de control
+- El panel (600x600, `decorations(false)`, fondo oscuro) se confundia con el
+  escritorio al intentar moverlo. Se agrego en `frontend/style.css` un
+  `body::after` fijo con `inset: 0`, `border: 1px solid rgba(236,231,219,0.45)`,
+  `pointer-events: none` y `z-index: 9999` (queda sobre `#snow` y `#titlebar` sin
+  bloquear clics).
+- Verificado por muestreo Xlib: los cuatro bordes dan ~(112-117,116-122,112-120)
+  claro vs interior ~(9-19,22-31,24-34) oscuro.
+
+### Gadget activo por defecto
+- Para que el paquete muestre que funciona sin abrir el panel, se deja
+  `_active: true` en el `config.json` de **Globo de Nieve** (autocontenido y
+  animado); el resto de gadgets quedan `_active: false`.
