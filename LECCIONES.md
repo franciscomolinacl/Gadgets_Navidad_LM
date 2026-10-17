@@ -350,3 +350,43 @@ bordes. Alternativa (no aplicada): fijar tamaño con
 - Colores por conteo PIL en la región de la ventana: CPU rojo ≈400px, RAM verde
   ≈400px, valores dorado ≈180px; la línea ocupa casi todo el ancho tras 60 s.
 - Recordar: el gadget debe estar visible (`_alwaysTop:true`) para capturarlo.
+
+## Grupo C: 5 gadgets nuevos (2026-10-17)
+
+### Gadgets creados
+- **Calendario de Adviento** (320x300): grid 6x4 de 24 puertas. En diciembre se
+  abren las puertas hasta el dia actual; el resto quedan bloqueadas. Persiste
+  `opened:[]` en config (`save_gadget_config`). Puerta abierta: estrella dorada
+  + palabra. En octubre se ve todo bloqueado (correcto).
+- **Globo de Nieve** (260x300): todo en `<canvas>`; esfera con arbol, muneco de
+  nieve, luna y nieve. Clic = `shake()` (impulso a las particulas).
+- **Termometro** (150x300): mercurio que sube segun los dias restantes para el
+  25 dic (`TOTAL_DAYS=90`); completo ese dia. Tubo visible + marcas doradas.
+- **Tarjeta** (320x220): postal con mensaje y firma **editables**
+  (`contenteditable`), persistidos en config (debounce 600 ms).
+- **Bailarin** (240x300): SVG animado con SMIL, sin JS.
+
+### Tecnicas
+- Animacion SVG sin JS: `<animateTransform>` / `<animate>` (SMIL), fiable en
+  WebKitGTK; con `transform-box` + CSS es mas fragil.
+- `contenteditable` con placeholder:
+  `[contenteditable][data-placeholder]:empty::before { content: attr(data-placeholder) }`.
+  El elemento debe quedar realmente vacio (`textContent=""`) para que `:empty`
+  coincida.
+- Iconos del panel: `gadgets/<Nombre>/icon.png` (128x128); si falta, el panel usa
+  `icon.png` raiz. Generados con PIL (fondo redondeado + glifo dorado).
+
+### Verificacion (leccion importante)
+- **Recortar `gnome-screenshot` por coordenadas y clasificar por umbrales falla**:
+  el verde de las puertas bloqueadas (`#256b45`) no superaba `g>140`, y el
+  mercurio se mezclaba con la bombilla. Mejor: **capturar la ventana con Xlib**
+  (`win.get_image`) y **muestrear pixeles concretos** (columna/fila) para leer
+  RGBA exactos. Asi se confirmo el mercurio rojo/naranja del Termometro que el
+  mapa ASCII mostraba "vacio".
+- Para activar gadgets nuevos sin el panel: escribir
+  `~/.config/gadgets-navidenos/<Nombre>/config.json` con `_active:true` antes de
+  iniciar la app (`ensure_user_gadget_configs` no pisa los existentes).
+- **No usar `pkill -f gadgets-navidenos-tauri`**: coincide con la propia linea de
+  comandos del shell y se autodestruye. Usar `systemctl --user stop gn-daemon`
+  (si se lanzo con `systemd-run --unit=gn-daemon`) o la trampa de corchetes
+  `pkill -f 'gadgets-navidenos-taur[i]'`.

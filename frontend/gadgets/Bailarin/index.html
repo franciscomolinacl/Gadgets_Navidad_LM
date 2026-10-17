@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="es">
+	<head>
+		<meta charset="UTF-8">
+		<title>Bailarin</title>
+		<link rel="stylesheet" href="style.css">
+	</head>
+	<body>
+		<div class="stage">
+			<svg viewBox="0 0 240 300" xmlns="http://www.w3.org/2000/svg">
+				<defs>
+					<linearGradient id="dress" x1="0" y1="0" x2="0" y2="1">
+						<stop offset="0" stop-color="#e74c3c"/>
+						<stop offset="1" stop-color="#a11f16"/>
+					</linearGradient>
+					<radialGradient id="glow" cx="0.5" cy="0.5" r="0.5">
+						<stop offset="0" stop-color="rgba(212,175,55,0.35)"/>
+						<stop offset="1" stop-color="rgba(212,175,55,0)"/>
+					</radialGradient>
+					<path id="star" d="M0 -7 L2 -2 L7 -2 L3 1 L4.5 6 L0 3 L-4.5 6 L-3 1 L-7 -2 L-2 -2 Z"/>
+				</defs>
+
+				<ellipse cx="120" cy="160" rx="110" ry="110" fill="url(#glow)"/>
+				<ellipse cx="120" cy="272" rx="44" ry="8" fill="rgba(0,0,0,0.4)"/>
+
+				<g>
+					<animateTransform attributeName="transform" type="rotate"
+						values="-6 120 268; 6 120 268; -6 120 268" dur="2.2s"
+						repeatCount="indefinite" calcMode="spline"
+						keyTimes="0;0.5;1" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"/>
+
+					<line x1="110" y1="196" x2="102" y2="264" stroke="#2b2b2b" stroke-width="9" stroke-linecap="round"/>
+					<line x1="130" y1="196" x2="138" y2="264" stroke="#2b2b2b" stroke-width="9" stroke-linecap="round"/>
+					<ellipse cx="100" cy="266" rx="12" ry="6" fill="#8a1410"/>
+					<ellipse cx="140" cy="266" rx="12" ry="6" fill="#8a1410"/>
+
+					<path d="M120 150 C104 150 100 176 100 190 L72 214 Q120 230 168 214 L140 190 C140 176 136 150 120 150 Z" fill="url(#dress)"/>
+					<path d="M100 190 Q120 204 140 190" fill="none" stroke="#d4af37" stroke-width="2.5" stroke-linecap="round"/>
+
+					<g>
+						<line x1="104" y1="166" x2="84" y2="204" stroke="#e74c3c" stroke-width="8" stroke-linecap="round"/>
+						<circle cx="84" cy="204" r="5" fill="#f2c9a0"/>
+						<animateTransform attributeName="transform" type="rotate"
+							values="18 104 166; -34 104 166; 18 104 166" dur="1.1s"
+							repeatCount="indefinite" calcMode="spline"
+							keyTimes="0;0.5;1" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"/>
+					</g>
+					<g>
+						<line x1="136" y1="166" x2="156" y2="204" stroke="#e74c3c" stroke-width="8" stroke-linecap="round"/>
+						<circle cx="156" cy="204" r="5" fill="#f2c9a0"/>
+						<animateTransform attributeName="transform" type="rotate"
+							values="-18 136 166; 34 136 166; -18 136 166" dur="1.1s"
+							repeatCount="indefinite" calcMode="spline"
+							keyTimes="0;0.5;1" keySplines="0.42 0 0.58 1; 0.42 0 0.58 1"/>
+					</g>
+
+					<circle cx="120" cy="132" r="17" fill="#f2c9a0"/>
+					<path d="M103 126 Q120 104 137 126 Q120 118 103 126 Z" fill="#7a4a1e"/>
+					<circle cx="114" cy="133" r="2" fill="#2b2b2b"/>
+					<circle cx="126" cy="133" r="2" fill="#2b2b2b"/>
+					<path d="M113 141 Q120 147 127 141" fill="none" stroke="#b2472e" stroke-width="2" stroke-linecap="round"/>
+
+					<path d="M104 122 Q118 92 138 116 Q132 112 122 116 Q112 120 104 122 Z" fill="#c0392b"/>
+					<rect x="102" y="116" width="38" height="8" rx="4" fill="#f4f7ff"/>
+					<circle cx="138" cy="113" r="6" fill="#f4f7ff"/>
+				</g>
+
+				<g fill="#d4af37">
+					<use href="#star" x="0" y="0" opacity="0">
+						<animateTransform attributeName="transform" type="translate" values="52 170; 42 110" dur="2.6s" repeatCount="indefinite"/>
+						<animate attributeName="opacity" values="0;1;0" dur="2.6s" repeatCount="indefinite"/>
+					</use>
+					<use href="#star" x="0" y="0" opacity="0">
+						<animateTransform attributeName="transform" type="translate" values="192 180; 200 120" dur="3.1s" repeatCount="indefinite"/>
+						<animate attributeName="opacity" values="0;1;0" dur="3.1s" repeatCount="indefinite"/>
+					</use>
+					<use href="#star" x="0" y="0" opacity="0">
+						<animateTransform attributeName="transform" type="translate" values="128 150; 124 84" dur="2.1s" repeatCount="indefinite" begin="0.6s"/>
+						<animate attributeName="opacity" values="0;1;0" dur="2.1s" repeatCount="indefinite" begin="0.6s"/>
+					</use>
+				</g>
+			</svg>
+		</div>
+	</body>
+</html>
