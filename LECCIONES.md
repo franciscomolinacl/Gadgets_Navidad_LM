@@ -155,3 +155,38 @@ guarda. El `label for=` de la fila también sigue toggleando el mismo input.
 Para localizarlo en pantalla se busca el segmento activo por color dorado
 (`#d4af37`→`#b8963a`) con agrupación de componentes conexos.
 
+
+## El Tiempo: búsqueda de ciudad (geocoding)
+
+### Implementación
+- API geocoding de Open-Meteo (gratuita, sin key):
+  `https://geocoding-api.open-meteo.com/v1/search?name={q}&count=8&language=es&format=json`
+- Clic en el nombre de la ciudad abre un overlay con input + resultados.
+- Al seleccionar: guarda `city/lat/lon` en config y recarga el clima.
+- Debounce de 250 ms antes de buscar.
+
+### Bugs encontrados y corregidos
+1. **`ignoreMouse: true` bloqueaba los clics**: El config del gadget hacía que
+   los clics pasaran a través de la ventana. Se cambió a `false` (el gadget
+   ahora es interactivo).
+2. **`hidden` no oculta con `display: flex`**: `.search-overlay` tenía
+   `display:flex`, que tiene más especificidad que el `display:none` implícito
+   del atributo `hidden`. El overlay nunca se cerraba. Fix:
+   `.search-overlay[hidden] { display: none; }`.
+3. **Overlay `100vw/100vh` se salía de la ventana**: La ventana del gadget es
+   300x212, pero `100vw` es el ancho del monitor. Se cambió a `100%`.
+
+### Lecciones de entorno
+- **Lanzar la app Tauri en background**: `nohup ... &` y `setsid ... &` fallan
+  de forma intermitente porque el shell tool mata el grupo de procesos al
+  terminar. Lo fiable: `start-stop-daemon --start --background --make-pidfile
+  --pidfile /tmp/gn.pid --startas /bin/bash -- -c "exec ./app >log 2>&1"`.
+- **Verificar invoke desde la webview**: Agregar un `invoke` temporal en `init`
+  que escriba un flag al config; si aparece, el canal funciona. Los debugs por
+  `document.title` no sirven (Tauri con `decorations:false` no propaga el título).
+- **Clics XTest en gadgets transparentes**: Difícil localizar elementos cuando
+  el fondo es transparente y se ve el escritorio detrás. Estrategia: barrido de
+  posiciones detectando el borde dorado del overlay (`r>140, g>100, b<140,
+  r>b+40`).
+- **Firefox con stub sirve para validar la lógica** (`window.__TAURI__` simulado
+  + `document.title` como logger), pero no valida el render en la webview real.
