@@ -1,6 +1,6 @@
-# DWALM Gadgets Tauri
+# Gadgets Navideños (Tauri)
 
-Migración a Tauri 2 de DWALM Gadgets Xmas (app Electron de gadgets navideños para el escritorio).
+Gadgets navideños para el escritorio — migración a Tauri 2 (antes "DWALM Gadgets Xmas", app Electron).
 
 - Origen (Electron): `/home/mint/proyectos/electron-gadgets`
 - Objetivo: mismos gadgets HTML/CSS/JS, shell en Rust, mucho menos consumo de RAM

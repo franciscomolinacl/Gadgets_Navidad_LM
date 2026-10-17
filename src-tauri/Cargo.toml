@@ -1,13 +1,13 @@
 [package]
-name = "dwalm-gadgets-tauri"
+name = "gadgets-navidenos-tauri"
 version = "2.0.0"
 edition = "2021"
-description = "DWALM Gadgets Xmas — gadgets navideños para el escritorio (Tauri)"
+description = "Gadgets Navideños para el escritorio (Tauri)"
 authors = ["Francisco Molina <contacto@franciscomolina.cl>"]
 license = "MIT"
 
 [[bin]]
-name = "dwalm-gadgets-tauri"
+name = "gadgets-navidenos-tauri"
 path = "src/main.rs"
 
 [build-dependencies]

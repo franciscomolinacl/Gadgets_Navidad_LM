@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "DWALM Gadgets Xmas",
+  "productName": "Gadgets Navideños",
   "version": "2.0.0",
-  "identifier": "cl.franciscomolina.dwalmgadgetsxmas",
+  "identifier": "cl.franciscomolina.gadgetsnavidenos",
   "build": {
     "frontendDist": "../frontend"
   },
