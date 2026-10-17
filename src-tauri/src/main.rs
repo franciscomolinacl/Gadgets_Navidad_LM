@@ -300,11 +300,12 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     let mut builder = WebviewWindowBuilder::new(app, &label, gadget_url(name))
         .title(name)
         .inner_size(width, height)
+        .min_inner_size(80.0, 30.0)
         .position(x, y)
         .transparent(true)
         .decorations(false)
         .skip_taskbar(true)
-        .resizable(false)
+        .resizable(true)
         .focused(false);
 
     let draggable = bool_field(&cfg, "draggable", true) && !fullscreen;
