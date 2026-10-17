@@ -12,6 +12,7 @@ const stopBtn = document.getElementById('stopBtn');
 const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const randomBtn = document.getElementById('randomBtn');
+const playlistEl = document.getElementById('playlist');
 
 let playlist = [];
 let currentIndex = 0;
@@ -20,6 +21,45 @@ let audioCtx, source, analyser, dataArray, bars;
 let lastVolume = 1;
 
 const imageExtensions = ['.jpg', '.jpeg', '.png'];
+
+function songLabel(file) {
+	return decodeURIComponent(file).replace(/\.[a-z0-9]+$/i, '');
+}
+
+function updatePlaylistHighlight() {
+	const items = playlistEl.children;
+	for (let i = 0; i < items.length; i++) {
+		items[i].classList.toggle('current', i === currentIndex);
+	}
+	const current = items[currentIndex];
+	if (current) current.scrollIntoView({ block: 'nearest' });
+}
+
+function renderPlaylist() {
+	playlistEl.innerHTML = '';
+	playlist.forEach((file, i) => {
+		const item = document.createElement('button');
+		item.className = 'pl-item' + (i === currentIndex ? ' current' : '');
+
+		const num = document.createElement('span');
+		num.className = 'pl-num';
+		num.textContent = String(i + 1);
+
+		const title = document.createElement('span');
+		title.className = 'pl-title';
+		title.textContent = songLabel(file);
+
+		item.appendChild(num);
+		item.appendChild(title);
+		item.addEventListener('click', () => {
+			currentIndex = i;
+			loadSong(i);
+			try { audioCtx.resume(); } catch (e) {}
+			audio.play();
+		});
+		playlistEl.appendChild(item);
+	});
+}
 
 function setupVisualizer() {
 	audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -50,8 +90,9 @@ function loadSong(index) {
 	const file = playlist[index];
 	if (!file) return;
 	audio.src = encodeURI(file);
-	songNameEl.innerHTML = decodeURIComponent(file).replace(/\.mp3$/i, '');
+	songNameEl.textContent = songLabel(file);
 	songNameEl.style.animationDuration = (window.__marqueeSpeed || 50) + 's';
+	updatePlaylistHighlight();
 }
 
 function bindControls() {
@@ -123,6 +164,7 @@ async function init() {
 		setupVisualizer();
 		render();
 		bindControls();
+		renderPlaylist();
 		if (playlist.length > 0) loadSong(currentIndex);
 	} catch (e) {
 		console.error('No se pudo inicializar el reproductor:', e);

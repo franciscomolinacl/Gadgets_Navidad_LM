@@ -190,3 +190,25 @@ Para localizarlo en pantalla se busca el segmento activo por color dorado
   r>b+40`).
 - **Firefox con stub sirve para validar la lógica** (`window.__TAURI__` simulado
   + `document.title` como logger), pero no valida el render en la webview real.
+
+## Reproductor: playlist visible
+
+### Implementación
+- Contenedor `#playlist` (max-height 148px, scroll) debajo de los controles.
+- `renderPlaylist()` crea un `<button class="pl-item">` por canción con número
+  + título (`text-overflow: ellipsis`).
+- `updatePlaylistHighlight()` marca `.current` y hace `scrollIntoView` para
+  seguir la canción sonando.
+- Clic en un item: fija `currentIndex`, `loadSong(i)` + `audio.play()`.
+- Para que quepa la playlist en la ventana 410x520 se compactó: cover
+  180→120 px, márgenes de visualizer/progress/controls reducidos.
+
+### Lección de verificación visual (sin ver imágenes)
+Para comprobar un cambio de estado que solo altera estilos (p. ej. cuál fila
+está resaltada) sin poder ver la captura:
+- Capturar antes y después con `gnome-screenshot`.
+- `ImageChops.difference(a, b).getbbox()` y contar píxeles cambiados por fila.
+- El bloque de filas que cambia delimita el elemento que se actualizó.
+- Detectar el texto dorado por color (`r>140,g>100,b<140,r>b+40`) ayuda a
+  localizar el item `.current` (color `#d4af37`), pero el **fondo** dorado es
+  tenue (`rgba(212,175,55,0.18)`) y no se detecta: hay que comparar capturas.

@@ -9,8 +9,8 @@ body {
 }
 
 .player-card {
-	width: 330px;
-	padding: 20px;
+	width: 370px;
+	padding: 16px;
 	border-radius: 25px;
 	backdrop-filter: blur(12px);
 	background: rgba(0,0,0,0.35);
@@ -22,8 +22,8 @@ body {
 }
 
 .cover-wrapper {
-	width: 180px;
-	height: 180px;
+	width: 120px;
+	height: 120px;
 	border-radius: 20px;
 	overflow: hidden;
 	box-shadow: 0 4px 20px rgba(0,0,0,0.4);
@@ -37,7 +37,7 @@ body {
 
 .song-info {
 	width: 100%;
-	margin-top: 20px;
+	margin-top: 12px;
 	text-align: center;
 	color: #fff;
 }
@@ -68,14 +68,14 @@ body {
 
 .progress-bar {
 	width: 90%;
-	margin: 12px auto;
+	margin: 8px auto;
 }
 
 .controls {
 	display: flex;
 	justify-content: center;
 	gap: 15px;
-	margin: 15px 0;
+	margin: 10px 0;
 }
 
 .circle-btn {
@@ -122,11 +122,11 @@ body {
 
 .visualizer {
 	width: 100%;
-	height: 40px;
+	height: 34px;
 	display: flex;
 	align-items: flex-end;
 	gap: 2px;
-	margin-top: 10px;
+	margin-top: 8px;
 }
 
 .visualizer div {
@@ -156,4 +156,72 @@ body {
 
 .ctrl:hover {
 	background: rgba(255,255,255,0.3);
+}
+
+.playlist {
+	width: 100%;
+	max-height: 148px;
+	overflow-y: auto;
+	margin-top: 10px;
+	padding-top: 8px;
+	border-top: 1px solid rgba(255,255,255,0.14);
+}
+
+.playlist::-webkit-scrollbar {
+	width: 5px;
+}
+
+.playlist::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.playlist::-webkit-scrollbar-thumb {
+	background: rgba(255,255,255,0.28);
+	border-radius: 3px;
+}
+
+.pl-item {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 8px;
+	border: none;
+	border-radius: 8px;
+	background: transparent;
+	color: rgba(255,255,255,0.75);
+	font-family: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+	transition: background 0.15s, color 0.15s;
+}
+
+.pl-item:hover {
+	background: rgba(255,255,255,0.1);
+	color: #fff;
+}
+
+.pl-item.current {
+	background: rgba(212,175,55,0.18);
+	color: #d4af37;
+}
+
+.pl-item.current .pl-num {
+	color: #d4af37;
+	opacity: 1;
+}
+
+.pl-num {
+	min-width: 18px;
+	font-size: 11px;
+	opacity: 0.5;
+	font-variant-numeric: tabular-nums;
+}
+
+.pl-title {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
