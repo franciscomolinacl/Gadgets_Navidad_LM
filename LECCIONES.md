@@ -212,3 +212,46 @@ está resaltada) sin poder ver la captura:
 - Detectar el texto dorado por color (`r>140,g>100,b<140,r>b+40`) ayuda a
   localizar el item `.current` (color `#d4af37`), pero el **fondo** dorado es
   tenue (`rgba(212,175,55,0.18)`) y no se detecta: hay que comparar capturas.
+
+## Reproductor: no reproducia (WebKitGTK + tauri://)
+
+### Sintoma
+El `<audio>` daba `MediaError.code = 4` (MEDIA_ERR_SRC_NOT_SUPPORTED) y no
+sonaba, aunque:
+- `fetch(encodeURI(file))` devolvia 200 con `content-type: audio/mpeg`.
+- El mp3 estaba embebido en el binario (assets de `frontendDist`).
+- `gst-discoverer-1.0` decodificaba el mp3 sin problema (MPEG-1 Layer 3).
+- El plugin `libgstmpg123.so` estaba instalado.
+
+### Causa
+El backend multimedia de **WebKitGTK usa GStreamer** para `<audio>`/`<video>`,
+y su elemento `source` no entiende el esquema custom `tauri://localhost/...`
+(usado para los assets embebidos). El `fetch` si funciona porque va por el
+proceso de red de WebKit, no por el pipeline de GStreamer.
+
+### Solucion
+Resolver el archivo a un **blob URL** y asignarlo al `<audio>`:
+
+```js
+async function resolveSrc(file) {
+    const url = encodeURI(file);
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        return URL.createObjectURL(blob);
+    } catch (e) {
+        return url;
+    }
+}
+```
+
+Con eso el `<audio>` carga (`canplay`) y reproduce (confirmado por un
+`sink-input` de PulseAudio con el `media.name` de la cancion).
+
+### Leccion de diagnostico (sin poder oir)
+- Verificar el stream real de audio con
+  `pactl list sink-inputs | grep media.name`: si aparece el nombre de la
+  cancion, WebKit esta emitiendo audio al servidor de sonido.
+- Descartar causas comparando capas: `fetch` (red) OK + `gst-discoverer`
+  (codec) OK + `<audio>.error.code` = 4 (pipeline) aisla el problema en el
+  media player, no en el asset ni en el codec.

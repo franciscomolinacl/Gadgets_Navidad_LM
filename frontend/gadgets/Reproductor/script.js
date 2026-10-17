@@ -51,12 +51,7 @@ function renderPlaylist() {
 
 		item.appendChild(num);
 		item.appendChild(title);
-		item.addEventListener('click', () => {
-			currentIndex = i;
-			loadSong(i);
-			try { audioCtx.resume(); } catch (e) {}
-			audio.play();
-		});
+		item.addEventListener('click', () => goTo(i, true));
 		playlistEl.appendChild(item);
 	});
 }
@@ -71,8 +66,7 @@ function setupVisualizer() {
 	const bufferLength = analyser.frequencyBinCount;
 	dataArray = new Uint8Array(bufferLength);
 	for (let i = 0; i < bufferLength; i++) {
-		const bar = document.createElement('div');
-		visualizerEl.appendChild(bar);
+		visualizerEl.appendChild(document.createElement('div'));
 	}
 	bars = Array.from(visualizerEl.children);
 }
@@ -86,53 +80,61 @@ function render() {
 	});
 }
 
-function loadSong(index) {
+// El backend GStreamer de WebKitGTK no puede reproducir el esquema custom
+// "tauri://", asi que el archivo se resuelve a un blob URL via fetch.
+async function resolveSrc(file) {
+	const url = encodeURI(file);
+	try {
+		const res = await fetch(url);
+		const blob = await res.blob();
+		return URL.createObjectURL(blob);
+	} catch (e) {
+		return url;
+	}
+}
+
+async function loadSong(index) {
 	const file = playlist[index];
 	if (!file) return;
-	audio.src = encodeURI(file);
+	const src = await resolveSrc(file);
+	if (audio.__blobUrl) URL.revokeObjectURL(audio.__blobUrl);
+	audio.__blobUrl = src.startsWith('blob:') ? src : null;
+	audio.src = src;
 	songNameEl.textContent = songLabel(file);
 	songNameEl.style.animationDuration = (window.__marqueeSpeed || 50) + 's';
 	updatePlaylistHighlight();
+}
+
+async function goTo(index, autoplay) {
+	if (!playlist.length) return;
+	currentIndex = index;
+	await loadSong(currentIndex);
+	if (autoplay) {
+		try { audioCtx.resume(); } catch (e) {}
+		const p = audio.play();
+		if (p && p.catch) p.catch(() => {});
+	}
 }
 
 function bindControls() {
 	playBtn.onclick = () => {
 		if (!audio.src) return;
 		try { audioCtx.resume(); } catch (e) {}
-		audio.play();
+		const p = audio.play();
+		if (p && p.catch) p.catch(() => {});
 	};
 	pauseBtn.onclick = () => audio.pause();
 	stopBtn.onclick = () => { audio.pause(); audio.currentTime = 0; };
-	nextBtn.onclick = () => {
-		if (!playlist.length) return;
-		currentIndex = (currentIndex + 1) % playlist.length;
-		loadSong(currentIndex);
-		audio.play();
-	};
-	prevBtn.onclick = () => {
-		if (!playlist.length) return;
-		currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
-		loadSong(currentIndex);
-		audio.play();
-	};
-	randomBtn.onclick = () => {
-		if (!playlist.length) return;
-		currentIndex = Math.floor(Math.random() * playlist.length);
-		loadSong(currentIndex);
-		audio.play();
-	};
+	nextBtn.onclick = () => goTo((currentIndex + 1) % playlist.length, true);
+	prevBtn.onclick = () => goTo((currentIndex - 1 + playlist.length) % playlist.length, true);
+	randomBtn.onclick = () => goTo(Math.floor(Math.random() * playlist.length), true);
 	audio.addEventListener('timeupdate', () => {
 		progressEl.value = (audio.currentTime / audio.duration) * 100;
 	});
 	progressEl.addEventListener('input', () => {
 		audio.currentTime = (progressEl.value / 100) * audio.duration;
 	});
-	audio.addEventListener('ended', () => {
-		if (!playlist.length) return;
-		currentIndex = (currentIndex + 1) % playlist.length;
-		loadSong(currentIndex);
-		audio.play();
-	});
+	audio.addEventListener('ended', () => goTo((currentIndex + 1) % playlist.length, true));
 	volumeEl.oninput = () => { audio.volume = volumeEl.value; };
 	muteBtn.onclick = () => {
 		if (audio.volume > 0) {
