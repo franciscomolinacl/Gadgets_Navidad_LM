@@ -90,3 +90,34 @@ tapado y sin recibir clics.
 ### Nota
 Ventanas `always_on_top` del panel quedan sobre otras apps mientras estén
 visibles; el usuario puede ocultar el panel desde la bandeja (clic izquierdo).
+
+## Rediseño del panel (2026-10-17)
+
+### Estilo
+Tema oscuro elegante navideño: fondo verde pino (`#0a1a17`) / azul noche
+(`#071019`) con acentos dorados (`#d4af37`), títulos en **Playfair Display** y
+texto en **Inter**, ambos self-hosted como `woff2` en `frontend/fonts/`
+(variable fonts, subset latin, ~48KB + 38KB). Se cargan por ruta relativa desde
+`style.css` (`url('fonts/inter.woff2')`) y Tauri los embebe en el binario al
+compilar.
+
+### Funcionalidad
+- Buscador de gadgets (filtra en vivo la lista lateral).
+- Indicador verde por gadget activo (punto) y badge Activo/Inactivo en la cabecera.
+- Interruptores tipo switch para los booleanos; inputs numéricos/texto estilizados.
+- Copos de nieve sutiles dibujados en un `<canvas>` (densidad `w*h/12000`,
+  respeta `prefers-reduced-motion`).
+
+### Cambio de comportamiento
+Antes, cada cambio recargaba toda la config (`loadConfig` tras 500ms). Ahora se
+actualiza solo lo necesario en sitio (badge + punto de la lista) → sin parpadeo.
+El guardado sigue igual: `save_gadget_config` (y `set_gadget_top` para
+`_alwaysTop`) aplican en vivo desde Rust.
+
+### Verificación sin poder ver imágenes
+Este modelo no puede leer imágenes. Para validar el render se usó **PIL** sobre
+una captura (`gnome-screenshot -f`) y un **mapa ASCII de luminancia**: promedio
+RGB del panel `(21,32,32)` (oscuro = tema nuevo), barra superior oscura, lista a
+la izquierda y filas de config a la derecha. No hay `node`/`jsc`/ImageMagick en
+el equipo; sí `gnome-screenshot` y `python3` + `PIL`.
+
