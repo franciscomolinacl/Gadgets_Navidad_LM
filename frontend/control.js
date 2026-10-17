@@ -1,12 +1,27 @@
 const invoke = window.__TAURI__.core.invoke;
+// El namespace de eventos puede no estar disponible en algunos contextos;
+// sin este guard, un error en top-level abortaria todo el script del panel.
+const listen =
+	(window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) ||
+	(() => Promise.resolve(() => {}));
 
 const listEl = document.getElementById("gadget-list");
 const area = document.getElementById("configArea");
 const searchEl = document.getElementById("search");
 const emptyEl = document.getElementById("list-empty");
+const profileSelect = document.getElementById("profile-select");
+const profileNameInput = document.getElementById("profile-name-input");
+const profileActions = document.getElementById("profile-actions");
+const profileApplyBtn = document.getElementById("profile-apply");
+const profileSaveBtn = document.getElementById("profile-save");
+const profileDelBtn = document.getElementById("profile-del");
+const autostartSeg = document.getElementById("autostart-seg");
 
 let gadgets = [];
+let favorites = [];
+let profiles = [];
 let currentName = null;
+let editingProfile = false;
 
 const prettyNames = {
 	width: "Ancho",
@@ -29,8 +44,72 @@ const prettyNames = {
 	_alwaysTop: "Siempre arriba",
 };
 
+// ---- Control segmentado OFF | ON ----
+// Devuelve el elemento de control y el input interno, para que quien lo use
+// pueda suscribirse al evento "change".
+function buildSeg(checked) {
+	const wrap = document.createElement("span");
+	wrap.className = "seg";
+
+	const input = document.createElement("input");
+	input.type = "checkbox";
+	input.checked = checked;
+
+	const off = document.createElement("span");
+	off.className = "seg-opt";
+	off.textContent = "OFF";
+
+	const on = document.createElement("span");
+	on.className = "seg-opt";
+	on.textContent = "ON";
+
+	wrap.append(input, off, on);
+
+	const paint = (v) => {
+		off.classList.toggle("is-on", !v);
+		on.classList.toggle("is-on", v);
+	};
+	paint(checked);
+
+	off.addEventListener("click", () => {
+		if (!input.checked) {
+			return;
+		}
+		input.checked = false;
+		paint(false);
+		input.dispatchEvent(new Event("change"));
+	});
+	on.addEventListener("click", () => {
+		if (input.checked) {
+			return;
+		}
+		input.checked = true;
+		paint(true);
+		input.dispatchEvent(new Event("change"));
+	});
+	input.addEventListener("change", () => paint(input.checked));
+
+	return { wrap, input };
+}
+
+function isFavorite(name) {
+	return favorites.includes(name);
+}
+
+function sortedGadgets(list) {
+	return [...list].sort((a, b) => {
+		const fa = isFavorite(a.name);
+		const fb = isFavorite(b.name);
+		if (fa !== fb) {
+			return fa ? -1 : 1;
+		}
+		return a.name.localeCompare(b.name, "es");
+	});
+}
+
 async function init() {
 	try {
+		favorites = await invoke("favorites_get");
 		const names = await invoke("gadgets_list");
 		gadgets = await Promise.all(
 			names.map(async (name) => {
@@ -42,9 +121,11 @@ async function init() {
 				return { name, active };
 			}),
 		);
+		profiles = await invoke("perfiles_list");
+		renderProfiles();
 		renderList();
 		if (gadgets.length) {
-			selectGadget(gadgets[0].name);
+			selectGadget(sortedGadgets(gadgets)[0].name);
 		}
 	} catch (err) {
 		console.error("No se pudo cargar la lista de gadgets:", err);
@@ -56,19 +137,48 @@ function renderList() {
 	listEl.innerHTML = "";
 	let shown = 0;
 
-	gadgets.forEach((g) => {
+	sortedGadgets(gadgets).forEach((g) => {
 		if (query && !g.name.toLowerCase().includes(query)) {
 			return;
 		}
 		shown += 1;
 
-		const btn = document.createElement("button");
+		const btn = document.createElement("div");
 		btn.className = "gadget-entry";
+		btn.setAttribute("role", "button");
+		btn.tabIndex = 0;
 		btn.dataset.name = g.name;
 		if (g.name === currentName) {
 			btn.classList.add("active");
 		}
 		btn.addEventListener("click", () => selectGadget(g.name));
+		btn.addEventListener("keydown", (e) => {
+			if (e.key === "Enter" || e.key === " ") {
+				e.preventDefault();
+				selectGadget(g.name);
+			}
+		});
+
+		const star = document.createElement("span");
+		star.className = "g-star" + (isFavorite(g.name) ? " fav" : "");
+		star.textContent = isFavorite(g.name) ? "★" : "☆";
+		star.title = isFavorite(g.name)
+			? "Quitar de favoritos"
+			: "Marcar como favorito";
+		star.addEventListener("click", async (e) => {
+			e.stopPropagation();
+			const nowFav = !isFavorite(g.name);
+			if (nowFav) {
+				favorites.push(g.name);
+			} else {
+				favorites = favorites.filter((n) => n !== g.name);
+			}
+			star.classList.toggle("fav", nowFav);
+			star.textContent = nowFav ? "★" : "☆";
+			await invoke("favorites_set", { name: g.name, favorite: nowFav });
+			// Reordenar tras un pequeño delay para que el cambio se vea.
+			setTimeout(renderList, 120);
+		});
 
 		const icon = document.createElement("img");
 		icon.className = "g-icon";
@@ -85,8 +195,9 @@ function renderList() {
 
 		const dot = document.createElement("span");
 		dot.className = "g-dot" + (g.active ? " on" : "");
+		dot.title = g.active ? "Activo" : "Inactivo";
 
-		btn.append(icon, name, dot);
+		btn.append(star, icon, name, dot);
 		listEl.appendChild(btn);
 	});
 
@@ -98,12 +209,16 @@ function setActive(name, active) {
 	if (g) {
 		g.active = active;
 	}
+	updateDot(name);
+}
+
+function updateDot(name) {
+	const g = gadgets.find((item) => item.name === name);
 	const el = [...listEl.children].find((c) => c.dataset.name === name);
-	if (el) {
-		const dot = el.querySelector(".g-dot");
-		if (dot) {
-			dot.classList.toggle("on", active);
-		}
+	const dot = el && el.querySelector(".g-dot");
+	if (dot && g) {
+		dot.classList.toggle("on", g.active);
+		dot.title = g.active ? "Activo" : "Inactivo";
 	}
 }
 
@@ -164,47 +279,10 @@ function renderConfig(name, config) {
 		let control;
 
 		if (typeof value === "boolean") {
-			control = document.createElement("span");
-			control.className = "seg";
-
-			input = document.createElement("input");
-			input.type = "checkbox";
-			input.checked = value;
+			const seg = buildSeg(value);
+			input = seg.input;
 			input.id = "f_" + key;
-
-			const off = document.createElement("span");
-			off.className = "seg-opt";
-			off.textContent = "OFF";
-
-			const on = document.createElement("span");
-			on.className = "seg-opt";
-			on.textContent = "ON";
-
-			control.append(input, off, on);
-
-			const paint = (v) => {
-				off.classList.toggle("is-on", !v);
-				on.classList.toggle("is-on", v);
-			};
-			paint(value);
-
-			off.addEventListener("click", () => {
-				if (!input.checked) {
-					return;
-				}
-				input.checked = false;
-				paint(false);
-				input.dispatchEvent(new Event("change"));
-			});
-			on.addEventListener("click", () => {
-				if (input.checked) {
-					return;
-				}
-				input.checked = true;
-				paint(true);
-				input.dispatchEvent(new Event("change"));
-			});
-			input.addEventListener("change", () => paint(input.checked));
+			control = seg.wrap;
 		} else {
 			input = document.createElement("input");
 			input.id = "f_" + key;
@@ -243,6 +321,131 @@ function renderConfig(name, config) {
 	area.appendChild(form);
 }
 
+// ---- Perfiles / Presets ----
+function renderProfiles() {
+	profileSelect.innerHTML = "";
+	if (!profiles.length) {
+		const opt = document.createElement("option");
+		opt.value = "";
+		opt.textContent = "Sin perfiles guardados";
+		profileSelect.appendChild(opt);
+		profileSelect.disabled = true;
+		profileApplyBtn.disabled = true;
+		profileDelBtn.disabled = true;
+	} else {
+		profiles.forEach((p) => {
+			const opt = document.createElement("option");
+			opt.value = p.nombre;
+			opt.textContent = p.nombre;
+			profileSelect.appendChild(opt);
+		});
+		profileSelect.disabled = false;
+		profileApplyBtn.disabled = false;
+		profileDelBtn.disabled = false;
+	}
+	setEditingProfile(false);
+}
+
+function setEditingProfile(on) {
+	editingProfile = on;
+	profileSelect.hidden = on;
+	profileNameInput.hidden = !on;
+	if (on) {
+		profileNameInput.value = "";
+		profileNameInput.focus();
+	} else {
+		profileSelect.focus({ preventScroll: true });
+	}
+}
+
+async function applyProfile() {
+	const nombre = profileSelect.value;
+	if (!nombre) {
+		return;
+	}
+	try {
+		await invoke("perfil_apply", { nombre });
+		// Recargar el estado real de todos los gadgets tras aplicar.
+		gadgets = await Promise.all(
+			gadgets.map(async (g) => {
+				const cfg = await invoke("load_gadget_config", { name: g.name });
+				return { name: g.name, active: !!cfg._active };
+			}),
+		);
+		renderList();
+		if (currentName) {
+			const cfg = await invoke("load_gadget_config", { name: currentName });
+			renderConfig(currentName, cfg);
+		}
+	} catch (err) {
+		console.error("Error al aplicar el perfil:", err);
+	}
+}
+
+async function saveProfile() {
+	const nombre = profileNameInput.value.trim();
+	if (!nombre) {
+		setEditingProfile(false);
+		return;
+	}
+	const map = {};
+	gadgets.forEach((g) => {
+		map[g.name] = !!g.active;
+	});
+	profiles = await invoke("perfil_save", { nombre, gadgets: map });
+	renderProfiles();
+	profileSelect.value = nombre;
+}
+
+async function deleteProfile() {
+	const nombre = profileSelect.value;
+	if (!nombre) {
+		return;
+	}
+	profiles = await invoke("perfil_delete", { nombre });
+	renderProfiles();
+}
+
+profileApplyBtn.addEventListener("click", applyProfile);
+profileDelBtn.addEventListener("click", deleteProfile);
+profileSaveBtn.addEventListener("click", () => {
+	if (editingProfile) {
+		saveProfile();
+	} else {
+		setEditingProfile(true);
+	}
+});
+profileNameInput.addEventListener("keydown", (e) => {
+	if (e.key === "Enter") {
+		saveProfile();
+	} else if (e.key === "Escape") {
+		setEditingProfile(false);
+	}
+});
+profileNameInput.addEventListener("blur", () => {
+	// No salir si el click fue en el boton de guardar.
+	setTimeout(() => {
+		if (editingProfile) {
+			setEditingProfile(false);
+		}
+	}, 150);
+});
+
+// ---- Arranque automatico ----
+async function initAutostart() {
+	const seg = buildSeg(await invoke("autostart_get"));
+	autostartSeg.className = seg.wrap.className;
+	autostartSeg.innerHTML = seg.wrap.innerHTML;
+	seg.input.addEventListener("change", async () => {
+		try {
+			await invoke("autostart_set", { enable: seg.input.checked });
+		} catch (err) {
+			console.error("Error al cambiar el arranque automatico:", err);
+		}
+	});
+}
+
+// ---- Copos de nieve del panel ----
 function initSnow() {
 	const canvas = document.getElementById("snow");
 	if (!canvas) {
@@ -323,5 +526,20 @@ document.getElementById("close-btn").addEventListener("click", async () => {
 	}
 });
 
+// Cambios hechos desde el menu contextual de un gadget o desde la bandeja:
+// hay que refrescar el badge, el punto verde y los segmentados.
+listen("gadget:config-changed", (event) => {
+	const { name, config } = event.payload || {};
+	const g = gadgets.find((item) => item.name === name);
+	if (g) {
+		g.active = !!config._active;
+	}
+	updateDot(name);
+	if (currentName === name) {
+		renderConfig(name, config);
+	}
+});
+
 init();
+initAutostart();
 initSnow();

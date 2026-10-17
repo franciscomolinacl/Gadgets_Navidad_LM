@@ -28,6 +28,119 @@ pub fn notas_path() -> PathBuf {
     user_config_root().join("notas.json")
 }
 
+/// Ajustes globales de la app (favoritos, etc.).
+pub fn app_settings_path() -> PathBuf {
+    user_config_root().join("app.json")
+}
+
+/// Perfiles/Presets: combinaciones guardadas de gadgets activos.
+pub fn perfiles_path() -> PathBuf {
+    user_config_root().join("perfiles.json")
+}
+
+fn load_json_file(path: &Path, initial: &str) -> serde_json::Value {
+    fs::read_to_string(path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_else(|| serde_json::from_str(initial).unwrap_or(serde_json::json!({})))
+}
+
+fn save_json_file(path: &Path, value: &serde_json::Value) {
+    if let Some(dir) = path.parent() {
+        ensure_dir(dir);
+    }
+    if let Ok(s) = serde_json::to_string_pretty(value) {
+        let _ = fs::write(path, s);
+    }
+}
+
+pub fn app_settings() -> serde_json::Value {
+    let v = load_json_file(&app_settings_path(), r#"{"favorites": []}"#);
+    // Garantiza la forma esperada aunque el archivo este corrupto o a medias.
+    serde_json::json!({
+        "favorites": v.get("favorites").and_then(|f| f.as_array()).cloned().unwrap_or_default(),
+    })
+}
+
+pub fn app_settings_save(value: &serde_json::Value) {
+    save_json_file(&app_settings_path(), value);
+}
+
+pub fn favorites() -> Vec<String> {
+    app_settings()
+        .get("favorites")
+        .and_then(|f| f.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|v| v.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+pub fn set_favorite(name: &str, favorite: bool) {
+    let mut settings = app_settings();
+    if let Some(obj) = settings.as_object_mut() {
+        let mut favs = obj
+            .get("favorites")
+            .and_then(|f| f.as_array())
+            .cloned()
+            .unwrap_or_default();
+        favs.retain(|v| v.as_str() != Some(name));
+        if favorite {
+            favs.push(serde_json::json!(name));
+        }
+        obj.insert("favorites".to_string(), serde_json::Value::Array(favs));
+    }
+    app_settings_save(&settings);
+}
+
+pub fn perfiles() -> serde_json::Value {
+    load_json_file(&perfiles_path(), r#"{"perfiles": []}"#)
+}
+
+pub fn perfiles_save(value: &serde_json::Value) {
+    save_json_file(&perfiles_path(), value);
+}
+
+/// Archivo .desktop del escritorio que arranca la app con la sesión.
+pub fn autostart_file() -> PathBuf {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    PathBuf::from(home)
+        .join(".config")
+        .join("autostart")
+        .join("gadgets-navidenos.desktop")
+}
+
+/// El arranque automatico esta activo si existe el archivo .desktop.
+pub fn autostart_is_enabled() -> bool {
+    autostart_file().exists()
+}
+
+pub fn autostart_set(enable: bool) -> std::io::Result<()> {
+    let path = autostart_file();
+    if !enable {
+        fs::remove_file(&path)?;
+        return Ok(());
+    }
+    let exe = std::env::current_exe()?;
+    let content = format!(
+        "[Desktop Entry]\n\
+         Type=Application\n\
+         Name=Gadgets Navideños\n\
+         Comment=Gadgets navideños para el escritorio\n\
+         Exec={}\n\
+         Icon=gadgets-navidenos\n\
+         Terminal=false\n\
+         X-GNOME-Autostart-enabled=true\n",
+        exe.display()
+    );
+    if let Some(dir) = path.parent() {
+        ensure_dir(dir);
+    }
+    fs::write(&path, content)
+}
+
 pub fn gadget_config_path(name: &str) -> PathBuf {
     user_config_root().join(name).join("config.json")
 }
@@ -37,6 +150,8 @@ pub fn gadget_config_path(name: &str) -> PathBuf {
 pub fn ensure_user_gadget_configs() {
     ensure_dir(&user_config_root());
     ensure_file(&notas_path(), "{}");
+    ensure_file(&app_settings_path(), r#"{"favorites": []}"#);
+    ensure_file(&perfiles_path(), r#"{"perfiles": []}"#);
     for (name, default_json) in GADGETS {
         let path = gadget_config_path(name);
         if !path.exists() {

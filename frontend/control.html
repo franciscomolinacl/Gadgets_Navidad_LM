@@ -29,6 +29,24 @@
 				<div id="search-wrap">
 					<input id="search" type="search" placeholder="Buscar gadget..." autocomplete="off" spellcheck="false">
 				</div>
+
+				<div id="sidebar-tools">
+					<div id="profiles">
+						<select id="profile-select" aria-label="Perfil seleccionado"></select>
+						<input id="profile-name-input" type="text" placeholder="Nombre del perfil..." hidden autocomplete="off" spellcheck="false">
+						<div id="profile-actions">
+							<button id="profile-apply" title="Aplicar el perfil seleccionado">Aplicar</button>
+							<button id="profile-save" title="Guardar los gadgets activos como perfil">Guardar</button>
+							<button id="profile-del" title="Eliminar el perfil seleccionado">×</button>
+						</div>
+					</div>
+
+					<div id="autostart-row">
+						<span>Arrancar al inicio</span>
+						<span class="seg" id="autostart-seg"></span>
+					</div>
+				</div>
+
 				<div id="gadget-list"></div>
 				<p id="list-empty" hidden>Sin resultados</p>
 			</aside>

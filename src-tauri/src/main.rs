@@ -3,7 +3,10 @@
 mod config;
 mod monitor;
 
-use tauri::menu::{MenuBuilder, MenuItemBuilder};
+use tauri::menu::{
+    CheckMenuItemBuilder, IsMenuItem, Menu, MenuBuilder, MenuItemBuilder, PredefinedMenuItem,
+    Submenu,
+};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
     App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
@@ -63,26 +66,124 @@ const GADGET_DRAG_INIT: &str = r#"
 })();
 "#;
 
+/// Script inyectado en cada gadget: menu contextual con clic derecho.
+/// Tauri 2 no expone `set_context_menu` para ventanas, asi que lo construimos
+/// en JS con un tema propio (mismo dorado/verde del panel).
+/// `__NAME__` se reemplaza por el nombre del gadget.
+const GADGET_CONTEXT_MENU: &str = r#"
+(() => {
+  const NAME = __NAME__;
+  const invoke = window.__TAURI__.core.invoke;
+  const CLICKABLE = new Set(["A","BUTTON","INPUT","SELECT","TEXTAREA","LABEL","SUMMARY"]);
+  const ROLES = new Set(["button","link","menuitem","tab","checkbox","radio","switch","option"]);
+  function isInteractive(el) {
+    return CLICKABLE.has(el.tagName)
+      || (el.hasAttribute("contenteditable") && el.getAttribute("contenteditable") !== "false")
+      || (el.hasAttribute("tabindex") && el.getAttribute("tabindex") !== "-1")
+      || ROLES.has(el.getAttribute("role"));
+  }
+  const st = document.createElement("style");
+  st.textContent = `#__gctx{position:fixed;z-index:2147483647;display:none;min-width:176px;padding:5px;
+    background:rgba(9,20,17,.96);border:1px solid rgba(212,175,55,.35);border-radius:10px;
+    box-shadow:0 12px 34px rgba(0,0,0,.55);user-select:none;
+    font-family:Inter,system-ui,-apple-system,sans-serif;font-size:12px;color:#ece7db;line-height:1.2}
+  #__gctx button{display:flex;align-items:center;gap:8px;width:100%;padding:7px 10px;margin:0;
+    font:inherit;color:inherit;background:transparent;border:0;border-radius:7px;cursor:pointer;text-align:left}
+  #__gctx button:hover{background:rgba(212,175,55,.16)}
+  #__gctx .ck{width:12px;color:#d4af37;font-weight:700}
+  #__gctx .sep{height:1px;margin:4px 6px;background:rgba(212,175,55,.22)}`;
+  document.documentElement.appendChild(st);
+
+  const menu = document.createElement("div");
+  menu.id = "__gctx";
+  document.body.appendChild(menu);
+
+  function item(label, fn, checked) {
+    const b = document.createElement("button");
+    const c = document.createElement("span");
+    c.className = "ck";
+    c.textContent = checked ? "✓" : "";
+    const t = document.createElement("span");
+    t.textContent = label;
+    b.append(c, t);
+    b.addEventListener("click", (e) => { e.stopPropagation(); hide(); fn(); });
+    menu.appendChild(b);
+  }
+  function sep() {
+    const d = document.createElement("div");
+    d.className = "sep";
+    menu.appendChild(d);
+  }
+  function hide() { menu.style.display = "none"; }
+
+  async function show(x, y) {
+    menu.innerHTML = "";
+    item("Panel de control", () => { invoke("show_panel"); });
+    let top = false;
+    try {
+      const cfg = await invoke("load_gadget_config", { name: NAME });
+      top = !!cfg._alwaysTop;
+    } catch (_) {}
+    item("Siempre arriba", () => {
+      invoke("set_gadget_top", { name: NAME, alwaysTop: !top });
+    }, top);
+    sep();
+    item("Desactivar", () => {
+      invoke("set_gadget_active", { name: NAME, active: false });
+    });
+    menu.style.display = "block";
+    const mw = menu.offsetWidth;
+    const mh = menu.offsetHeight;
+    menu.style.left = Math.max(4, Math.min(x, window.innerWidth - mw - 4)) + "px";
+    menu.style.top = Math.max(4, Math.min(y, window.innerHeight - mh - 4)) + "px";
+  }
+
+  document.addEventListener("contextmenu", (e) => {
+    if (!(e.target instanceof Element) || isInteractive(e.target)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    show(e.clientX, e.clientY);
+  }, true);
+  document.addEventListener("mousedown", (e) => {
+    if (menu.contains(e.target)) return;
+    hide();
+  }, true);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") hide(); });
+  window.addEventListener("blur", hide);
+  window.addEventListener("resize", hide);
+})();
+"#;
+
 /// Genera la URL para cargar un gadget desde el frontendDist embebido.
 fn gadget_url(name: &str) -> WebviewUrl {
     WebviewUrl::App(format!("gadgets/{name}/index.html").into())
 }
 
-/// Normaliza el nombre del gadget para obtener una etiqueta de ventana valida.
-/// Tauri permite caracteres alfanumericos, -, _, /, :, .; reemplazamos espacios y raros por '_'.
-fn gadget_label(name: &str) -> String {
-    let sanitized: String = name
-        .chars()
+/// Reemplaza los caracteres no validos en un nombre de gadget por '_'.
+fn sanitize_id(name: &str) -> String {
+    name.chars()
         .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/' || c == ':' || c == '.'
-            {
+            if c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '/' || c == ':' || c == '.' {
                 c
             } else {
                 '_'
             }
         })
-        .collect();
-    format!("gadget_{sanitized}")
+        .collect()
+}
+
+/// Normaliza el nombre del gadget para obtener una etiqueta de ventana valida.
+/// Tauri permite caracteres alfanumericos, -, _, /, :, .; reemplazamos espacios y raros por '_'.
+fn gadget_label(name: &str) -> String {
+    format!("gadget_{}", sanitize_id(name))
+}
+
+/// Recupera el nombre real de un gadget a partir del id sanitizado usado en los menus.
+fn gadget_name_from_id(sanitized: &str) -> Option<String> {
+    config::GADGETS
+        .iter()
+        .map(|(n, _)| n.to_string())
+        .find(|n| sanitize_id(&n) == sanitized)
 }
 
 fn bool_field(v: &serde_json::Value, key: &str, default: bool) -> bool {
@@ -109,7 +210,8 @@ fn primary_work_area(app: &AppHandle) -> (f64, f64, f64, f64) {
     }
 }
 
-fn show_panel(app: &AppHandle) {
+#[tauri::command]
+fn show_panel(app: AppHandle) {
     if let Some(w) = app.get_webview_window("control") {
         let _ = w.set_always_on_top(true);
         let _ = w.show();
@@ -142,6 +244,34 @@ fn deactivate_all_gadgets(app: &AppHandle) {
             let _ = win.destroy();
         }
     }
+}
+
+/// Activa o desactiva un gadget abriendo/cerrando su ventana.
+/// Avisa a la bandeja para que los checks queden sincronizados.
+fn apply_gadget_active(app: &AppHandle, name: &str, active: bool) -> Result<(), String> {
+    let mut cfg = config::load_gadget_config(name);
+    if let Some(obj) = cfg.as_object_mut() {
+        obj.insert("_active".to_string(), serde_json::json!(active));
+    }
+    config::save_gadget_config(name, &cfg);
+
+    let label = gadget_label(name);
+    if active {
+        if app.get_webview_window(&label).is_none() {
+            create_gadget(app, name).map_err(|e| e.to_string())?;
+        }
+    } else if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.destroy();
+    }
+    refresh_tray(app);
+    Ok(())
+}
+
+/// Notifica al panel que la config de un gadget cambio (por el menu contextual
+/// o la bandeja), para que refresque el badge y el punto verde.
+fn emit_config_changed(app: &AppHandle, name: &str) {
+    let cfg = config::load_gadget_config(name);
+    let _ = app.emit("gadget:config-changed", serde_json::json!({ "name": name, "config": cfg }));
 }
 
 fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
@@ -178,9 +308,13 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
         .focused(false);
 
     let draggable = bool_field(&cfg, "draggable", true) && !fullscreen;
-    builder = builder.initialization_script(
-        &GADGET_DRAG_INIT.replace("__ENABLED__", if draggable { "true" } else { "false" }),
+    let drag_script = GADGET_DRAG_INIT
+        .replace("__ENABLED__", if draggable { "true" } else { "false" });
+    let ctx_script = GADGET_CONTEXT_MENU.replace(
+        "__NAME__",
+        &serde_json::json!(name).to_string(),
     );
+    builder = builder.initialization_script(&format!("{drag_script}\n{ctx_script}"));
 
     builder = if always_top {
         builder.always_on_top(true)
@@ -261,26 +395,70 @@ fn create_control_panel(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-fn create_tray(app: &App) -> tauri::Result<()> {
+/// Construye el menu de la bandeja: Mostrar Panel, lista de gadgets con
+/// checkboxes de estado, desactivar todos y salir.
+fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
     let show = MenuItemBuilder::with_id("show", "Mostrar Panel").build(app)?;
     let deactivate = MenuItemBuilder::with_id("deactivate_all", "Desactivar todos los gadgets")
         .build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Salir").build(app)?;
-    let menu = MenuBuilder::new(app)
-        .items(&[&show, &deactivate, &quit])
-        .build()?;
+
+    let mut checks: Vec<_> = Vec::new();
+    for (name, _) in config::GADGETS {
+        let cfg = config::load_gadget_config(name);
+        let active = bool_field(&cfg, "_active", false);
+        let item = CheckMenuItemBuilder::with_id(format!("g:{}", sanitize_id(name)), name)
+            .checked(active)
+            .build(app)?;
+        checks.push(item);
+    }
+    let items: Vec<&dyn IsMenuItem<tauri::Wry>> =
+        checks.iter().map(|c| c as &dyn IsMenuItem<tauri::Wry>).collect();
+    let gadgets_menu = Submenu::with_items(app, "Gadgets", true, &items)?;
+
+    let sep = PredefinedMenuItem::separator(app)?;
+
+    MenuBuilder::new(app)
+        .items(&[&show as &dyn IsMenuItem<tauri::Wry>, &sep, &gadgets_menu])
+        .item(&deactivate)
+        .item(&quit)
+        .build()
+}
+
+/// Reconstruye el menu de la bandeja con el estado actual de los gadgets.
+fn refresh_tray(app: &AppHandle) {
+    if let Some(tray) = app.tray_by_id("main") {
+        if let Ok(menu) = build_tray_menu(app) {
+            let _ = tray.set_menu(Some(menu));
+        }
+    }
+}
+
+fn create_tray(app: &App) -> tauri::Result<()> {
+    let menu = build_tray_app(app)?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Gadgets Navideños")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "show" => show_panel(app),
-            "deactivate_all" => deactivate_all_gadgets(app),
+            "show" => show_panel(app.clone()),
+            "deactivate_all" => {
+                deactivate_all_gadgets(app);
+                refresh_tray(app);
+            }
             "quit" => {
                 app.exit(0);
             }
-            _ => {}
+            _ => {
+                if let Some(rest) = event.id.as_ref().strip_prefix("g:") {
+                    if let Some(name) = gadget_name_from_id(rest) {
+                        let cfg = config::load_gadget_config(&name);
+                        let active = bool_field(&cfg, "_active", false);
+                        let _ = apply_gadget_active(app, &name, !active);
+                    }
+                }
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click {
@@ -309,7 +487,36 @@ fn create_tray(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Perfiles / Presets
+// ---------------------------------------------------------------------------
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+struct Perfil {
+    nombre: String,
+    gadgets: serde_json::Value,
+}
+
+fn perfiles_from(value: &serde_json::Value) -> Vec<Perfil> {
+    value
+        .get("perfiles")
+        .and_then(|p| p.as_array())
+        .map(|arr| {
+            arr.iter()
+                .filter_map(|p| serde_json::from_value(p.clone()).ok())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn perfiles_store(list: &[Perfil]) -> serde_json::Value {
+    serde_json::json!({ "perfiles": list })
+}
+
+// ---------------------------------------------------------------------------
 // Commands
+// ---------------------------------------------------------------------------
+
 #[tauri::command]
 fn get_user_data_path() -> String {
     config::user_config_root().to_string_lossy().to_string()
@@ -364,11 +571,18 @@ fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -
             let _ = win.destroy();
         }
     }
+    refresh_tray(&app);
     Ok(())
 }
 
 #[tauri::command]
 fn set_gadget_top(app: AppHandle, name: String, always_top: bool) -> Result<(), String> {
+    let mut cfg = config::load_gadget_config(&name);
+    if let Some(obj) = cfg.as_object_mut() {
+        obj.insert("_alwaysTop".to_string(), serde_json::json!(always_top));
+    }
+    config::save_gadget_config(&name, &cfg);
+
     let label = gadget_label(&name);
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.set_always_on_top(always_top);
@@ -377,7 +591,15 @@ fn set_gadget_top(app: AppHandle, name: String, always_top: bool) -> Result<(), 
     if always_top {
         raise_panel_if_visible(&app);
     }
+    emit_config_changed(&app, &name);
     Ok(())
+}
+
+#[tauri::command]
+fn set_gadget_active(app: AppHandle, name: String, active: bool) -> Result<(), String> {
+    let result = apply_gadget_active(&app, &name, active);
+    emit_config_changed(&app, &name);
+    result
 }
 
 #[tauri::command]
@@ -400,6 +622,75 @@ fn window_close(app: AppHandle) {
     if let Some(w) = app.get_webview_window("control") {
         let _ = w.hide();
     }
+}
+
+// Favoritos
+#[tauri::command]
+fn favorites_get() -> Vec<String> {
+    config::favorites()
+}
+
+#[tauri::command]
+fn favorites_set(name: String, favorite: bool) {
+    config::set_favorite(&name, favorite);
+}
+
+// Perfiles / Presets
+#[tauri::command]
+fn perfiles_list() -> Vec<Perfil> {
+    perfiles_from(&config::perfiles())
+}
+
+#[tauri::command]
+fn perfil_save(nombre: String, gadgets: serde_json::Value) -> Vec<Perfil> {
+    let mut list = perfiles_from(&config::perfiles());
+    list.retain(|p| p.nombre != nombre);
+    list.push(Perfil { nombre, gadgets });
+    config::perfiles_save(&perfiles_store(&list));
+    list
+}
+
+#[tauri::command]
+fn perfil_apply(app: AppHandle, nombre: String) -> Result<Vec<String>, String> {
+    let list = perfiles_from(&config::perfiles());
+    let perfil = list
+        .into_iter()
+        .find(|p| p.nombre == nombre)
+        .ok_or_else(|| format!("No existe el perfil «{nombre}»"))?;
+
+    let mut aplicados = Vec::new();
+    if let Some(map) = perfil.gadgets.as_object() {
+        for (name, val) in map {
+            let active = val.as_bool().unwrap_or(false);
+            apply_gadget_active(&app, name, active)?;
+            aplicados.push(name.clone());
+        }
+    }
+    Ok(aplicados)
+}
+
+#[tauri::command]
+fn perfil_delete(nombre: String) -> Vec<Perfil> {
+    let mut list = perfiles_from(&config::perfiles());
+    list.retain(|p| p.nombre != nombre);
+    config::perfiles_save(&perfiles_store(&list));
+    list
+}
+
+// Arranque automatico
+#[tauri::command]
+fn autostart_get() -> bool {
+    config::autostart_is_enabled()
+}
+
+#[tauri::command]
+fn autostart_set(enable: bool) -> Result<bool, String> {
+    config::autostart_set(enable).map_err(|e| format!("No se pudo escribir el arranque automatico: {e}"))?;
+    Ok(config::autostart_is_enabled())
+}
+
+fn build_tray_app(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
+    build_tray_menu(app.handle())
 }
 
 fn main() {
@@ -427,10 +718,20 @@ fn main() {
             load_gadget_config,
             save_gadget_config,
             set_gadget_top,
+            set_gadget_active,
+            show_panel,
             sticky_load,
             sticky_save,
             window_close,
-            gadget_media_files
+            gadget_media_files,
+            favorites_get,
+            favorites_set,
+            perfiles_list,
+            perfil_save,
+            perfil_apply,
+            perfil_delete,
+            autostart_get,
+            autostart_set
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Tauri");
