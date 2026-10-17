@@ -146,3 +146,12 @@ Se localizó el knob gris del switch `#cfd6cf` en una captura con PIL (buscar
 píxeles cercanos a ese color y agruparlos), se clickeó con XTest en su centro y
 se comprobó que el `_active` del gadget pasó a `true` y apareció su ventana.
 
+### Control final: segmentado OFF | ON
+El usuario encontró el switch "anchos y raros", así que se reemplazó por un
+**segmentado OFF | ON** en las filas booleanas. Dos `<span>` de 40 px (iguales)
+más un `<input type="checkbox">` oculto que guarda el estado: los segmentos
+llaman a `paint()` y emiten `new Event("change")` para que corra el listener que
+guarda. El `label for=` de la fila también sigue toggleando el mismo input.
+Para localizarlo en pantalla se busca el segmento activo por color dorado
+(`#d4af37`→`#b8963a`) con agrupación de componentes conexos.
+

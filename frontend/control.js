@@ -164,18 +164,47 @@ function renderConfig(name, config) {
 		let control;
 
 		if (typeof value === "boolean") {
-			control = document.createElement("label");
-			control.className = "switch";
+			control = document.createElement("span");
+			control.className = "seg";
 
 			input = document.createElement("input");
 			input.type = "checkbox";
 			input.checked = value;
 			input.id = "f_" + key;
 
-			const slider = document.createElement("span");
-			slider.className = "slider";
+			const off = document.createElement("span");
+			off.className = "seg-opt";
+			off.textContent = "OFF";
 
-			control.append(input, slider);
+			const on = document.createElement("span");
+			on.className = "seg-opt";
+			on.textContent = "ON";
+
+			control.append(input, off, on);
+
+			const paint = (v) => {
+				off.classList.toggle("is-on", !v);
+				on.classList.toggle("is-on", v);
+			};
+			paint(value);
+
+			off.addEventListener("click", () => {
+				if (!input.checked) {
+					return;
+				}
+				input.checked = false;
+				paint(false);
+				input.dispatchEvent(new Event("change"));
+			});
+			on.addEventListener("click", () => {
+				if (input.checked) {
+					return;
+				}
+				input.checked = true;
+				paint(true);
+				input.dispatchEvent(new Event("change"));
+			});
+			input.addEventListener("change", () => paint(input.checked));
 		} else {
 			input = document.createElement("input");
 			input.id = "f_" + key;
