@@ -11,6 +11,7 @@ const prettyNames = {
 	x: "Pos. horizontal",
 	y: "Pos. vertical",
 	fullscreen: "Pantalla completa",
+	draggable: "Arrastrable",
 	movable: "Movible",
 	ignoreMouse: "Ignorar mouse",
 	speed: "Velocidad",

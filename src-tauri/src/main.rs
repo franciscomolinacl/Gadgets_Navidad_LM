@@ -5,7 +5,63 @@ mod monitor;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{App, AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
+
+/// Script inyectado en cada gadget: arrastre libre con clic izquierdo.
+/// Solo arma el arrastre si el puntero supera un umbral, para no romper
+/// los clics de los gadgets. `__ENABLED__` se reemplaza al crear la ventana.
+const GADGET_DRAG_INIT: &str = r#"
+(() => {
+  let enabled = __ENABLED__;
+  const THRESHOLD = 4;
+  let armed = false, startX = 0, startY = 0;
+  const CLICKABLE = new Set(["A","BUTTON","INPUT","SELECT","TEXTAREA","LABEL","SUMMARY"]);
+  const ROLES = new Set(["button","link","menuitem","tab","checkbox","radio","switch","option"]);
+  function isInteractive(el) {
+    return CLICKABLE.has(el.tagName)
+      || (el.hasAttribute("contenteditable") && el.getAttribute("contenteditable") !== "false")
+      || (el.hasAttribute("tabindex") && el.getAttribute("tabindex") !== "-1")
+      || ROLES.has(el.getAttribute("role"));
+  }
+  function blocked(el) {
+    for (let n = el; n instanceof Element; n = n.parentElement) {
+      const attr = n.getAttribute("data-tauri-drag-region");
+      if (attr === "false") return true;
+      if (isInteractive(n) && attr === null) return true;
+    }
+    return false;
+  }
+  document.addEventListener("mousedown", (e) => {
+    if (!enabled || e.button !== 0 || e.defaultPrevented) return;
+    if (!(e.target instanceof Element) || blocked(e.target)) return;
+    armed = true;
+    startX = e.clientX;
+    startY = e.clientY;
+    e.preventDefault();
+  });
+  document.addEventListener("mousemove", (e) => {
+    if (!armed) return;
+    if (!(e.buttons & 1)) { armed = false; return; }
+    if (Math.hypot(e.clientX - startX, e.clientY - startY) > THRESHOLD) {
+      armed = false;
+      window.__TAURI_INTERNALS__.invoke("plugin:window|start_dragging");
+    }
+  });
+  const disarm = () => { armed = false; };
+  document.addEventListener("mouseup", disarm);
+  window.addEventListener("blur", disarm);
+  const registerToggle = () => {
+    window.__TAURI__.event.listen("gadget:drag", (ev) => { enabled = !!ev.payload; });
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", registerToggle, { once: true });
+  } else {
+    registerToggle();
+  }
+})();
+"#;
 
 /// Genera la URL para cargar un gadget desde el frontendDist embebido.
 fn gadget_url(name: &str) -> WebviewUrl {
@@ -55,8 +111,36 @@ fn primary_work_area(app: &AppHandle) -> (f64, f64, f64, f64) {
 
 fn show_panel(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("control") {
+        let _ = w.set_always_on_top(true);
         let _ = w.show();
         let _ = w.set_focus();
+    }
+}
+
+/// Sube el panel si esta visible. Los gadgets `always_on_top` comparten la capa
+/// "above" con el panel y se apilan segun quien se levanto ultimo; llamando a
+/// esto tras apilar un gadget encima, el panel queda siempre accesible.
+fn raise_panel_if_visible(app: &AppHandle) {
+    if let Some(panel) = app.get_webview_window("control") {
+        if panel.is_visible().unwrap_or(false) {
+            let _ = panel.set_focus();
+        }
+    }
+}
+
+/// Escape de emergencia: desactiva todos los gadgets (los cierra y marca
+/// `_active = false` en su config). Util si un gadget a pantalla completa
+/// queda encima de todo y no deja interactuar con el escritorio.
+fn deactivate_all_gadgets(app: &AppHandle) {
+    for (name, _) in config::GADGETS {
+        let mut cfg = config::load_gadget_config(name);
+        if let Some(obj) = cfg.as_object_mut() {
+            obj.insert("_active".to_string(), serde_json::json!(false));
+        }
+        config::save_gadget_config(name, &cfg);
+        if let Some(win) = app.get_webview_window(&gadget_label(name)) {
+            let _ = win.destroy();
+        }
     }
 }
 
@@ -93,6 +177,11 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
         .resizable(false)
         .focused(false);
 
+    let draggable = bool_field(&cfg, "draggable", true) && !fullscreen;
+    builder = builder.initialization_script(
+        &GADGET_DRAG_INIT.replace("__ENABLED__", if draggable { "true" } else { "false" }),
+    );
+
     builder = if always_top {
         builder.always_on_top(true)
     } else {
@@ -102,18 +191,32 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     let win = builder.build()?;
     let _ = win.set_ignore_cursor_events(ignore_mouse);
 
-    // Persistir posicion al mover
+    // Un gadget `always_on_top` se apila sobre el panel (misma capa "above").
+    // Si el panel esta visible, lo volvemos a subir para que siempre quede
+    // accesible por encima de los gadgets.
+    if always_top {
+        raise_panel_if_visible(app);
+    }
+
+    // Persistir posicion al mover.
+    // En Linux/X11 el evento `Moved` reporta la posicion del marco (outer), que
+    // difiere de la posicion del cliente por el alto del marco del WM. Como
+    // `set_position` usa coordenadas del cliente, persistimos `inner_position`
+    // para que la posicion guardada coincida con la aplicada al reiniciar.
     let name_owned = name.to_string();
     let win_for_move = win.clone();
     win.on_window_event(move |event| {
-        if let WindowEvent::Moved(pos) = event {
+        if let WindowEvent::Moved(_) = event {
             let cfgm = config::load_gadget_config(&name_owned);
             if bool_field(&cfgm, "fullscreen", false) {
                 return;
             }
+            let Ok(inner) = win_for_move.inner_position() else {
+                return;
+            };
             let sf = win_for_move.scale_factor().unwrap_or(1.0);
-            let lx = ((pos.x as f64) / sf).round();
-            let ly = ((pos.y as f64) / sf).round();
+            let lx = ((inner.x as f64) / sf).round();
+            let ly = ((inner.y as f64) / sf).round();
             let mut newcfg = cfgm;
             if let Some(obj) = newcfg.as_object_mut() {
                 obj.insert("x".to_string(), serde_json::json!(lx));
@@ -143,6 +246,7 @@ fn create_control_panel(app: &AppHandle) -> tauri::Result<()> {
         .decorations(false)
         .skip_taskbar(true)
         .resizable(false)
+        .always_on_top(true)
         .focused(true)
         .build()?;
 
@@ -159,8 +263,12 @@ fn create_control_panel(app: &AppHandle) -> tauri::Result<()> {
 
 fn create_tray(app: &App) -> tauri::Result<()> {
     let show = MenuItemBuilder::with_id("show", "Mostrar Panel").build(app)?;
+    let deactivate = MenuItemBuilder::with_id("deactivate_all", "Desactivar todos los gadgets")
+        .build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Salir").build(app)?;
-    let menu = MenuBuilder::new(app).items(&[&show, &quit]).build()?;
+    let menu = MenuBuilder::new(app)
+        .items(&[&show, &deactivate, &quit])
+        .build()?;
 
     let mut builder = TrayIconBuilder::with_id("main")
         .tooltip("Gadgets Navideños")
@@ -168,6 +276,7 @@ fn create_tray(app: &App) -> tauri::Result<()> {
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_panel(app),
+            "deactivate_all" => deactivate_all_gadgets(app),
             "quit" => {
                 app.exit(0);
             }
@@ -237,8 +346,14 @@ fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -
         let always_top = bool_field(&config, "_alwaysTop", false);
         let _ = win.set_always_on_top(always_top);
         let _ = win.set_always_on_bottom(!always_top);
+        if always_top {
+            raise_panel_if_visible(&app);
+        }
         let ignore_mouse = bool_field(&config, "ignoreMouse", false);
         let _ = win.set_ignore_cursor_events(ignore_mouse);
+        let draggable = bool_field(&config, "draggable", true)
+            && !bool_field(&config, "fullscreen", false);
+        let _ = win.emit("gadget:drag", draggable);
     }
 
     let active = bool_field(&config, "_active", false);
@@ -258,6 +373,9 @@ fn set_gadget_top(app: AppHandle, name: String, always_top: bool) -> Result<(), 
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.set_always_on_top(always_top);
         let _ = win.set_always_on_bottom(!always_top);
+    }
+    if always_top {
+        raise_panel_if_visible(&app);
     }
     Ok(())
 }
@@ -289,7 +407,6 @@ fn main() {
         .setup(|app| {
             config::ensure_user_gadget_configs();
             let handle = app.handle().clone();
-            create_control_panel(&handle)?;
             create_tray(app)?;
             for (name, _) in config::GADGETS {
                 let cfg = config::load_gadget_config(name);
@@ -297,6 +414,10 @@ fn main() {
                     let _ = create_gadget(&handle, name);
                 }
             }
+            // El panel se crea al final para quedar por encima de los gadgets
+            // `always_on_top` (comparten la capa "above" y gana el ultimo en
+            // apilarse). Asi el panel nunca queda sepultado por un gadget.
+            create_control_panel(&handle)?;
             monitor::spawn(handle);
             Ok(())
         })

@@ -3,10 +3,10 @@ use std::path::{Path, PathBuf};
 
 include!(concat!(env!("OUT_DIR"), "/gadgets_generated.rs"));
 
-/// Raiz de configuracion del usuario: ~/.config/dwalm-gadgets
+/// Raiz de configuracion del usuario: ~/.config/gadgets-navidenos
 pub fn user_config_root() -> PathBuf {
     let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    PathBuf::from(home).join(".config").join("dwalm-gadgets")
+    PathBuf::from(home).join(".config").join("gadgets-navidenos")
 }
 
 fn ensure_dir(dir: &Path) {
@@ -49,10 +49,15 @@ pub fn ensure_user_gadget_configs() {
 }
 
 pub fn load_gadget_config(name: &str) -> serde_json::Value {
-    fs::read_to_string(gadget_config_path(name))
+    let mut value = fs::read_to_string(gadget_config_path(name))
         .ok()
         .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}))
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(obj) = value.as_object_mut() {
+        obj.entry("draggable".to_string())
+            .or_insert(serde_json::json!(true));
+    }
+    value
 }
 
 pub fn save_gadget_config(name: &str, config: &serde_json::Value) {
