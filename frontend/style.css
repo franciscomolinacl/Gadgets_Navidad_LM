@@ -373,8 +373,8 @@ body {
 /* ---- Switch ---- */
 .switch {
 	position: relative;
-	width: 46px;
-	height: 26px;
+	width: 36px;
+	height: 20px;
 	flex-shrink: 0;
 	cursor: pointer;
 }
@@ -402,10 +402,10 @@ body {
 .slider::before {
 	content: '';
 	position: absolute;
-	width: 18px;
-	height: 18px;
-	top: 3px;
-	left: 3px;
+	width: 14px;
+	height: 14px;
+	top: 2px;
+	left: 2px;
 	border-radius: 50%;
 	background: #cfd6cf;
 	transition: transform 0.25s, background 0.25s;
@@ -417,7 +417,7 @@ body {
 }
 
 .switch input:checked + .slider::before {
-	transform: translateX(20px);
+	transform: translateX(18px);
 	background: #fff;
 }
 
