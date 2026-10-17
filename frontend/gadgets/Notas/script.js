@@ -1,15 +1,16 @@
-const { ipcRenderer } = require("electron");
+const invoke = window.__TAURI__.core.invoke;
+
 const textArea = document.getElementById("note");
 const MAX_HEIGHT = 350;
 
 async function loadNote() {
-    const text = await ipcRenderer.invoke("sticky-load");
+    const text = await invoke("sticky_load");
     textArea.value = text || "";
     autoResize();
 }
 
 function saveNote() {
-    ipcRenderer.send("sticky-save", textArea.value);
+    invoke("sticky_save", { text: textArea.value });
 }
 
 function autoResize() {

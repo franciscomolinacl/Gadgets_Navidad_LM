@@ -83,3 +83,25 @@ pub fn sticky_save(text: &str) {
         let _ = fs::write(path, s);
     }
 }
+
+/// Devuelve los archivos multimedia embebidos de un gadget, opcionalmente
+/// filtrados por subcarpeta (por ejemplo "musica" o "images").
+pub fn gadget_media(name: &str, subfolder: Option<&str>) -> Vec<String> {
+    for (g, files) in GADGET_MEDIA {
+        if *g != name {
+            continue;
+        }
+        return match subfolder {
+            Some(sub) if !sub.is_empty() => {
+                let prefix = format!("{sub}/");
+                files
+                    .iter()
+                    .filter(|f| f.starts_with(&prefix))
+                    .map(|f| f.to_string())
+                    .collect()
+            }
+            _ => files.iter().map(|f| f.to_string()).collect(),
+        };
+    }
+    Vec::new()
+}

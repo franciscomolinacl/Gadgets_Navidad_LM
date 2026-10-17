@@ -1,4 +1,5 @@
-const { ipcRenderer } = require('electron');
+const { listen } = window.__TAURI__.event;
+
 const WIDTH = 150;
 const HEIGHT = 50;
 const MAX_POINTS = 60;
@@ -46,7 +47,8 @@ function draw() {
 	plotLine(txArr, '#ffa366', 0.95);
 }
 
-ipcRenderer.on('net-stats', (e, stats) => {
+listen('net-stats', (event) => {
+	const stats = event.payload;
 	const { rx, tx, iface } = stats;
 	pushSample(rx, tx);
 

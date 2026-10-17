@@ -1,6 +1,7 @@
-const { ipcRenderer } = require('electron');
+const { listen } = window.__TAURI__.event;
 
-ipcRenderer.on('cpu-ram', (e, stats) => {
+listen('cpu-ram', (event) => {
+	const stats = event.payload;
 	const { cpu, ram } = stats;
 
 	document.getElementById('cpuFill').style.width = cpu + "%";

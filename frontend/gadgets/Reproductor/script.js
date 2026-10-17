@@ -1,9 +1,5 @@
-const fs = require('fs');
-const path = require('path');
-const { ipcRenderer } = require("electron");
-const userData = ipcRenderer.sendSync("get-user-data-path");
-const gadgetName = path.basename(__dirname);
-const configPath = path.join(userData, gadgetName, "config.json");
+const invoke = window.__TAURI__.core.invoke;
+
 const coverEl = document.getElementById('cover');
 const songNameEl = document.getElementById('song-name');
 const visualizerEl = document.getElementById('visualizer');
@@ -17,114 +13,120 @@ const prevBtn = document.getElementById('prevBtn');
 const nextBtn = document.getElementById('nextBtn');
 const randomBtn = document.getElementById('randomBtn');
 
-const config = JSON.parse(fs.readFileSync(path.join(configPath)));
-const musicFolder = path.resolve(__dirname, config.folder);
-
-let playlist = fs.readdirSync(musicFolder).filter(f => f.endsWith(".mp3"));
+let playlist = [];
 let currentIndex = 0;
-
-let coverImage = "default_cover.png";
-const imageExtensions = [".jpg", ".jpeg", ".png"];
-
-for (const file of fs.readdirSync(musicFolder)) {
-	if (imageExtensions.some(ext => file.toLowerCase().endsWith(ext))) {
-		coverImage = path.join(musicFolder, file);
-		break;
-	}
-}
-coverEl.src = coverImage;
-
-let audio = new Audio();
-
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const source = audioCtx.createMediaElementSource(audio);
-const analyser = audioCtx.createAnalyser();
-
-source.connect(analyser);
-analyser.connect(audioCtx.destination);
-analyser.fftSize = 64;
-
-let bufferLength = analyser.frequencyBinCount;
-let dataArray = new Uint8Array(bufferLength);
-
-for (let i = 0; i < bufferLength; i++) {
-	const bar = document.createElement("div");
-	visualizerEl.appendChild(bar);
-}
-
-let bars = Array.from(visualizerEl.children);
-
-function loadSong(index) {
-	const file = playlist[index];
-	audio.src = path.join(musicFolder, file);
-	songNameEl.innerHTML = file.replace(".mp3", "");
-	songNameEl.style.animationDuration = (config.marqueeSpeed || 50) + "s";
-}
-
-playBtn.onclick = () => {
-	audio.play();
-	audioCtx.resume();
-};
-
-pauseBtn.onclick = () => audio.pause();
-stopBtn.onclick = () => { audio.pause(); audio.currentTime = 0; };
-
-nextBtn.onclick = () => {
-	currentIndex = (currentIndex + 1) % playlist.length;
-	loadSong(currentIndex);
-	audio.play();
-};
-
-prevBtn.onclick = () => {
-	currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
-	loadSong(currentIndex);
-	audio.play();
-};
-
-randomBtn.onclick = () => {
-	currentIndex = Math.floor(Math.random() * playlist.length);
-	loadSong(currentIndex);
-	audio.play();
-};
-
-audio.addEventListener("timeupdate", () => {
-	progressEl.value = (audio.currentTime / audio.duration) * 100;
-});
-
-progressEl.addEventListener("input", () => {
-	audio.currentTime = (progressEl.value / 100) * audio.duration;
-});
-
-audio.addEventListener("ended", () => {
-	currentIndex = (currentIndex + 1) % playlist.length;
-	loadSong(currentIndex);
-	audio.play();
-});
-
-volumeEl.oninput = () => audio.volume = volumeEl.value;
-
+let audio = null;
+let audioCtx, source, analyser, dataArray, bars;
 let lastVolume = 1;
-muteBtn.onclick = () => {
-	if (audio.volume > 0) {
-		lastVolume = audio.volume;
-		audio.volume = 0;
-		volumeEl.value = 0;
-		muteBtn.textContent = "🔊";
-	} else {
-		audio.volume = lastVolume;
-		volumeEl.value = lastVolume;
-		muteBtn.textContent = "🔇";
+
+const imageExtensions = ['.jpg', '.jpeg', '.png'];
+
+function setupVisualizer() {
+	audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+	source = audioCtx.createMediaElementSource(audio);
+	analyser = audioCtx.createAnalyser();
+	source.connect(analyser);
+	analyser.connect(audioCtx.destination);
+	analyser.fftSize = 64;
+	const bufferLength = analyser.frequencyBinCount;
+	dataArray = new Uint8Array(bufferLength);
+	for (let i = 0; i < bufferLength; i++) {
+		const bar = document.createElement('div');
+		visualizerEl.appendChild(bar);
 	}
-};
+	bars = Array.from(visualizerEl.children);
+}
 
 function render() {
 	requestAnimationFrame(render);
+	if (!analyser) return;
 	analyser.getByteFrequencyData(dataArray);
-
 	bars.forEach((bar, i) => {
-		bar.style.height = (dataArray[i] / 255 * 100) + "%";
+		bar.style.height = (dataArray[i] / 255 * 100) + '%';
 	});
 }
-render();
 
-if (playlist.length > 0) loadSong(currentIndex);
+function loadSong(index) {
+	const file = playlist[index];
+	if (!file) return;
+	audio.src = encodeURI(file);
+	songNameEl.innerHTML = decodeURIComponent(file).replace(/\.mp3$/i, '');
+	songNameEl.style.animationDuration = (window.__marqueeSpeed || 50) + 's';
+}
+
+function bindControls() {
+	playBtn.onclick = () => {
+		if (!audio.src) return;
+		try { audioCtx.resume(); } catch (e) {}
+		audio.play();
+	};
+	pauseBtn.onclick = () => audio.pause();
+	stopBtn.onclick = () => { audio.pause(); audio.currentTime = 0; };
+	nextBtn.onclick = () => {
+		if (!playlist.length) return;
+		currentIndex = (currentIndex + 1) % playlist.length;
+		loadSong(currentIndex);
+		audio.play();
+	};
+	prevBtn.onclick = () => {
+		if (!playlist.length) return;
+		currentIndex = (currentIndex - 1 + playlist.length) % playlist.length;
+		loadSong(currentIndex);
+		audio.play();
+	};
+	randomBtn.onclick = () => {
+		if (!playlist.length) return;
+		currentIndex = Math.floor(Math.random() * playlist.length);
+		loadSong(currentIndex);
+		audio.play();
+	};
+	audio.addEventListener('timeupdate', () => {
+		progressEl.value = (audio.currentTime / audio.duration) * 100;
+	});
+	progressEl.addEventListener('input', () => {
+		audio.currentTime = (progressEl.value / 100) * audio.duration;
+	});
+	audio.addEventListener('ended', () => {
+		if (!playlist.length) return;
+		currentIndex = (currentIndex + 1) % playlist.length;
+		loadSong(currentIndex);
+		audio.play();
+	});
+	volumeEl.oninput = () => { audio.volume = volumeEl.value; };
+	muteBtn.onclick = () => {
+		if (audio.volume > 0) {
+			lastVolume = audio.volume;
+			audio.volume = 0;
+			volumeEl.value = 0;
+			muteBtn.textContent = '🔊';
+		} else {
+			audio.volume = lastVolume;
+			volumeEl.value = lastVolume;
+			muteBtn.textContent = '🔇';
+		}
+	};
+}
+
+async function init() {
+	try {
+		const cfg = await invoke('load_gadget_config', { name: 'Reproductor' });
+		const folder = cfg.folder || 'musica';
+		window.__marqueeSpeed = cfg.marqueeSpeed || 50;
+
+		const files = await invoke('gadget_media_files', { name: 'Reproductor', subfolder: folder });
+		playlist = files.filter((f) => f.toLowerCase().endsWith('.mp3'));
+
+		const cover = files.find((f) => imageExtensions.some((ext) => f.toLowerCase().endsWith(ext)));
+		coverEl.src = cover ? encodeURI(cover) : 'default_cover.png';
+
+		audio = new Audio();
+		setupVisualizer();
+		render();
+		bindControls();
+		if (playlist.length > 0) loadSong(currentIndex);
+	} catch (e) {
+		console.error('No se pudo inicializar el reproductor:', e);
+	}
+}
+
+init();

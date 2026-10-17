@@ -273,6 +273,11 @@ fn sticky_save(text: String) {
 }
 
 #[tauri::command]
+fn gadget_media_files(name: String, subfolder: Option<String>) -> Vec<String> {
+    config::gadget_media(&name, subfolder.as_deref())
+}
+
+#[tauri::command]
 fn window_close(app: AppHandle) {
     if let Some(w) = app.get_webview_window("control") {
         let _ = w.hide();
@@ -303,7 +308,8 @@ fn main() {
             set_gadget_top,
             sticky_load,
             sticky_save,
-            window_close
+            window_close,
+            gadget_media_files
         ])
         .run(tauri::generate_context!())
         .expect("error al iniciar Tauri");
