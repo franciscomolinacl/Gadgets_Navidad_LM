@@ -1,22 +1,22 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 	<head>
 		<meta charset="UTF-8">
 		<title>CPU & RAM</title>
 		<link rel="stylesheet" href="style.css">
 	</head>
 	<body>
-		<div id="container">
-			<div class="section">
-				<div class="label">CPU</div>
-				<div class="bar"><div class="fill" id="cpuFill"></div></div>
-				<div class="value" id="cpuValue">0%</div>
+		<div id="container" role="main">
+			<div class="row">
+				<span class="label cpu">CPU</span>
+				<canvas class="spark" id="cpuSpark" width="240" height="52"></canvas>
+				<span class="value" id="cpuValue">--%</span>
 			</div>
 
-			<div class="section">
-				<div class="label">RAM</div>
-				<div class="bar"><div class="fill" id="ramFill"></div></div>
-				<div class="value" id="ramValue">0%</div>
+			<div class="row">
+				<span class="label ram">RAM</span>
+				<canvas class="spark" id="ramSpark" width="240" height="52"></canvas>
+				<span class="value" id="ramValue">--%</span>
 			</div>
 		</div>
 

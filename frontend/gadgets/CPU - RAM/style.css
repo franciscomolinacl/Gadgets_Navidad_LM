@@ -1,40 +1,58 @@
-body {
+html, body {
 	margin: 0;
-	background: rgba(0,0,0,0.50);
-	font-family: sans-serif;
-	color: white;
+	width: 100%;
+	height: 100%;
 	overflow: hidden;
+	font-family: system-ui, -apple-system, sans-serif;
+	color: #fff;
 }
 
 #container {
-	padding: 10px;
+	box-sizing: border-box;
 	width: 100%;
+	height: 100%;
+	padding: 8px 12px;
+	background: linear-gradient(160deg, rgba(10,26,23,0.85), rgba(7,16,25,0.85));
+	border: 1px solid rgba(212,175,55,0.35);
+	border-radius: 12px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	gap: 8px;
 }
 
-.section {
-	margin-bottom: 20px;
+.row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
 }
 
 .label {
-	font-size: 14px;
+	width: 30px;
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.5px;
 }
 
-.bar {
-	width: 100%;
-	height: 12px;
-	background: rgba(255,255,255,0.25);
-	border-radius: 10px;
-	overflow: hidden;
-	margin-top: 5px;
+.label.cpu {
+	color: #e74c3c;
 }
 
-.fill {
-	height: 100%;
-	width: 0%;
-	background: rgba(0,255,0,0.7);
-	transition: width 0.2s linear;
+.label.ram {
+	color: #2ecc71;
+}
+
+.spark {
+	flex: 1;
+	height: 26px;
+	min-width: 0;
 }
 
 .value {
+	width: 42px;
 	font-size: 13px;
+	font-weight: 700;
+	color: #d4af37;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
 }

@@ -255,3 +255,98 @@ Con eso el `<audio>` carga (`canplay`) y reproduce (confirmado por un
 - Descartar causas comparando capas: `fetch` (red) OK + `gst-discoverer`
   (codec) OK + `<audio>.error.code` = 4 (pipeline) aisla el problema en el
   media player, no en el asset ni en el codec.
+
+## CRÍTICO: refresh del frontend embebido en builds debug (2026-10-17)
+
+### Síntoma
+Editar un gadget (`index.html`/`script.js`/`style.css`) y reconstruir con
+`touch build.rs && cargo build` o `touch src/main.rs && cargo build` **no**
+reflejaba los cambios: la ventana seguía mostrando la versión anterior.
+
+### Causa
+- Los assets de `frontendDist` (`../frontend`) se **embeber en el binario** en
+  tiempo de compilación (`tauri::generate_context!` + lo que genera
+  `tauri_build::build()` en `OUT_DIR`).
+- `build.rs` (propio) solo declara `rerun-if-changed` para el **directorio**
+  `../frontend/gadgets`, `config.json` e `index.html`; **no** para `script.js`
+  ni `style.css`.
+- `tauri-build` guarda los assets en `OUT_DIR`; si no se re-ejecuta, tocar
+  `main.rs` recompila pero vuelve a incluir el asset **viejo**.
+
+### Solución fiable (forzar la regeneración de assets)
+```
+cd src-tauri
+rm -rf target/debug/build/gadgets-navidenos-tauri-*
+cargo build
+```
+Esto obliga a re-ejecutar `build.rs`/`tauri-build` y re-embebe el frontend.
+Tocar `tauri.conf.json` también dispara `tauri-build`, pero no resultó
+suficiente de forma consistente; el `rm -rf` del dir de build sí es fiable.
+
+### Verificación de embedding
+Insertar una **caja visible inline** en el `index.html`
+(`<div style="position:fixed;top:0;right:0;width:40px;height:40px;background:#00ff00">`)
+y buscarla con PIL por color puro. Sirve para confirmar que el binario embebe
+realmente el HTML nuevo (independiente del CSS/JS).
+
+## CRÍTICO: los gadgets `always_on_bottom` quedan TAPADOS (2026-10-17)
+
+### Síntoma
+Las capturas mostraban texto/ventanas que no eran el gadget: parecía que el
+gadget no renderizaba, su altura era rara, no aparecían los colores, etc.
+
+### Causa
+Los gadgets se crean con `_alwaysTop:false` → `always_on_bottom(true)`, o sea
+en la capa **ABOVE baja**. El **terminal OpenCode (kitty) está a pantalla
+completa** (`1280x728+0+32`) y tapa todo lo que esté debajo, incluidos los
+gadgets. `gnome-screenshot` captura el terminal, no el gadget.
+
+### Solución para verificar/ver un gadget
+- Poner el gadget a la vista temporalmente con `_alwaysTop:true` en su config y
+  reiniciar, **o**
+- `wmctrl -a "<nombre>"` para activarlo/subirlo, **o** cerrar/minimizar el
+  terminal.
+
+### Lección
+Antes de diagnosticar un gadget "que no renderiza", confirmar con
+`xwininfo -root -tree` qué ventana cubre su posición y cuál es su orden de
+apilamiento. Un gadget `always_on_bottom` bajo una ventana maximizada es
+invisible en las capturas aunque esté perfecto.
+
+## Crash/bug: `resizable(false)` fuerza mínimo 200px en Linux (2026-10-17)
+
+### Síntoma
+Ajustar `CPU - RAM` a 220x96 daba una ventana de 220x**200** (cliente 168):
+el alto pedido se ignoraba; el ancho sí se respetaba. Config de 100/130/150/168
+→ todas quedaban en 168 de cliente; 180 sí se respetaba.
+
+### Causa
+Bug conocido de `tao`/`tauri` en Linux: con `resizable:false` el WM fuerza un
+**mínimo de ~200px** (cliente ~168) — ver tauri-apps/tao#561 y
+tauri-apps/tauri#6125. `min_inner_size(80,30)` NO lo evita.
+
+### Solución aplicada
+Cambiar `WebviewWindowBuilder::resizable(false)` → `resizable(true)` en
+`create_gadget`. Sin decoraciones el usuario no ve asas de redimensión, así que
+la UX no cambia. Verificado: config 96 → cliente 96 (outer 128).
+
+### Nota
+El usuario puede redimensionar con atajos del WM (p. ej. Alt+F8) aunque no haya
+bordes. Alternativa (no aplicada): fijar tamaño con
+`webkit2gtk`/`gtk::prelude::WidgetExt::set_size_request` vía `with_webview`.
+
+## CPU-RAM: sparkline compacto (2026-10-17)
+
+### Diseño
+- Ventana 220x96. Dos filas (CPU/RAM): etiqueta (rojo `#e74c3c` / verde
+  `#2ecc71`), `<canvas class="spark">` y valor dorado.
+- Historial `MAX_SAMPLES=60` (últimos 60 s, el evento `cpu-ram` llega cada 1 s).
+- `drawSpark()`: área con gradiente (alfa 0.35→0), línea de 3px, **alineado a la
+  derecha** y avanza hacia la izquierda; al inicio ocupa pocos px (se llena en
+  ~60 s).
+- `fitCanvas()` ajusta el buffer del canvas al tamaño CSS × `devicePixelRatio`.
+
+### Verificación (visual, sin ver imágenes)
+- Colores por conteo PIL en la región de la ventana: CPU rojo ≈400px, RAM verde
+  ≈400px, valores dorado ≈180px; la línea ocupa casi todo el ancho tras 60 s.
+- Recordar: el gadget debe estar visible (`_alwaysTop:true`) para capturarlo.
