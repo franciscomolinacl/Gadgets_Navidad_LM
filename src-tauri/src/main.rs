@@ -382,7 +382,7 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
                 obj.insert("y".to_string(), serde_json::json!(ly));
             }
             config::save_gadget_config(&name_owned, &newcfg);
-            let _ = app_handle.emit("gadget:config-changed", &name_owned);
+            let _ = app_handle.emit("gadget:config-changed", serde_json::json!({ "name": name_owned, "config": newcfg }));
         }
     });
 
