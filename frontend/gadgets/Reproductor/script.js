@@ -160,7 +160,7 @@ async function init() {
 		playlist = files.filter((f) => f.toLowerCase().endsWith('.mp3'));
 
 		const cover = files.find((f) => imageExtensions.some((ext) => f.toLowerCase().endsWith(ext)));
-		coverEl.src = cover ? encodeURI(cover) : 'default_cover.png';
+		coverEl.src = cover ? encodeURI(cover) : 'icon.png';
 
 		audio = new Audio();
 		setupVisualizer();

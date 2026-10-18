@@ -18,7 +18,7 @@ document.getElementById("vela-container").addEventListener("click", () => {
         if (sonido) {
             sonido.currentTime = 0;
             sonido.volume = 0.2;
-            sonido.play();
+            sonido.play().catch(() => {});
         }
     } else {
         // Apaga

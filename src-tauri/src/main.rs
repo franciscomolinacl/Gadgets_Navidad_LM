@@ -327,11 +327,12 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     );
     builder = builder.initialization_script(&format!("{drag_script}\n{ctx_script}"));
 
-    builder = if always_top {
-        builder.always_on_top(true)
-    } else {
-        builder.always_on_bottom(true)
-    };
+    // Sin keep_below: los gadgets son ventanas normales, asi que al crearse se
+    // apilan ENCIMA de las ventanas abiertas (antes quedaban invisibles debajo
+    // de ventanas maximizadas como el terminal). Solo _alwaysTop usa keep_above.
+    if always_top {
+        builder = builder.always_on_top(true);
+    }
 
     let win = builder.build()?;
     let _ = win.set_ignore_cursor_events(ignore_mouse);
@@ -590,7 +591,7 @@ fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -
         }
         let always_top = bool_field(&merged, "_alwaysTop", false);
         let _ = win.set_always_on_top(always_top);
-        let _ = win.set_always_on_bottom(!always_top);
+        let _ = win.set_always_on_bottom(false);
         if always_top {
             raise_panel_if_visible(&app);
         }
@@ -624,7 +625,7 @@ fn set_gadget_top(app: AppHandle, name: String, always_top: bool) -> Result<(), 
     let label = gadget_label(&name);
     if let Some(win) = app.get_webview_window(&label) {
         let _ = win.set_always_on_top(always_top);
-        let _ = win.set_always_on_bottom(!always_top);
+        let _ = win.set_always_on_bottom(false);
     }
     if always_top {
         raise_panel_if_visible(&app);
