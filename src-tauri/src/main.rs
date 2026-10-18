@@ -210,13 +210,23 @@ fn primary_work_area(app: &AppHandle) -> (f64, f64, f64, f64) {
     }
 }
 
+/// Muestra u oculta el panel y recuerda ese estado para el proximo arranque.
+fn set_panel_visible(app: &AppHandle, visible: bool) {
+    config::set_panel_visible(visible);
+    if let Some(w) = app.get_webview_window("control") {
+        if visible {
+            let _ = w.set_always_on_top(true);
+            let _ = w.show();
+            let _ = w.set_focus();
+        } else {
+            let _ = w.hide();
+        }
+    }
+}
+
 #[tauri::command]
 fn show_panel(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("control") {
-        let _ = w.set_always_on_top(true);
-        let _ = w.show();
-        let _ = w.set_focus();
-    }
+    set_panel_visible(&app, true);
 }
 
 /// Sube el panel si esta visible. Los gadgets `always_on_top` comparten la capa
@@ -373,6 +383,8 @@ fn create_control_panel(app: &AppHandle) -> tauri::Result<()> {
     let height = 600.0;
     let x = wx + (ww - width);
     let y = wy + 50.0;
+    // Arranca como estaba al salir: cerrado -> no vuelve a aparecer.
+    let visible = config::panel_visible();
 
     let win = WebviewWindowBuilder::new(app, "control", WebviewUrl::App("control.html".into()))
         .title("Panel de Control")
@@ -382,14 +394,15 @@ fn create_control_panel(app: &AppHandle) -> tauri::Result<()> {
         .skip_taskbar(true)
         .resizable(false)
         .always_on_top(true)
-        .focused(true)
+        .visible(visible)
+        .focused(visible)
         .build()?;
 
-    let w = win.clone();
+    let h = app.clone();
     win.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
             api.prevent_close();
-            let _ = w.hide();
+            set_panel_visible(&h, false);
         }
     });
 
@@ -470,12 +483,8 @@ fn create_tray(app: &App) -> tauri::Result<()> {
             {
                 let h = tray.app_handle();
                 if let Some(w) = h.get_webview_window("control") {
-                    if w.is_visible().unwrap_or(false) {
-                        let _ = w.hide();
-                    } else {
-                        let _ = w.show();
-                        let _ = w.set_focus();
-                    }
+                    let visible = w.is_visible().unwrap_or(false);
+                    set_panel_visible(h, !visible);
                 }
             }
         });
@@ -620,9 +629,7 @@ fn gadget_media_files(name: String, subfolder: Option<String>) -> Vec<String> {
 
 #[tauri::command]
 fn window_close(app: AppHandle) {
-    if let Some(w) = app.get_webview_window("control") {
-        let _ = w.hide();
-    }
+    set_panel_visible(&app, false);
 }
 
 // Favoritos

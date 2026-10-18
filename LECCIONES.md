@@ -477,3 +477,20 @@ bordes. Alternativa (no aplicada): fijar tamaño con
 - Para que el paquete muestre que funciona sin abrir el panel, se deja
   `_active: true` en el `config.json` de **Globo de Nieve** (autocontenido y
   animado); el resto de gadgets quedan `_active: false`.
+
+### Visibilidad persistida del panel (2026-10-17)
+- Sintoma: al reiniciar (arranque automatico o manual) se abria el panel de
+  control aunque el usuario lo hubiera cerrado antes de salir.
+- Causa: `create_control_panel` siempre construia la ventana visible; la
+  ocultacion (`×`, bandeja, `CloseRequested`) solo llamaba a `hide()` sin
+  guardar el estado en ningun lado.
+- Solucion: `panel_visible` vive en `~/.config/gadgets-navidenos/app.json`
+  (`config::panel_visible` / `config::set_panel_visible`) y TODA la
+  visibilidad pasa por `set_panel_visible(app, bool)` en `main.rs`, que
+  persiste y luego muestra/oculta. El builder usa `.visible(saved)` /
+  `.focused(saved)`.
+- Leccion: centralizar mostrar/ocultar en una sola funcion que ademas
+  persiste evita olvidar rutas (× del panel, `window_close`, clic izquierdo
+  de la bandeja y `CloseRequested` escriben el estado; `show_panel` pone true).
+- Verificacion: `xwininfo -root -tree` tras relanzar con `panel_visible:false`
+  no muestra "Panel de Control" pero si el gadget activo (Globo de Nieve).

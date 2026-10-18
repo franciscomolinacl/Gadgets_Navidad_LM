@@ -59,7 +59,24 @@ pub fn app_settings() -> serde_json::Value {
     // Garantiza la forma esperada aunque el archivo este corrupto o a medias.
     serde_json::json!({
         "favorites": v.get("favorites").and_then(|f| f.as_array()).cloned().unwrap_or_default(),
+        "panel_visible": v.get("panel_visible").and_then(|x| x.as_bool()).unwrap_or(true),
     })
+}
+
+/// Visibilidad del panel de control al iniciar la app.
+pub fn panel_visible() -> bool {
+    app_settings()
+        .get("panel_visible")
+        .and_then(|x| x.as_bool())
+        .unwrap_or(true)
+}
+
+pub fn set_panel_visible(visible: bool) {
+    let mut settings = app_settings();
+    if let Some(obj) = settings.as_object_mut() {
+        obj.insert("panel_visible".to_string(), serde_json::json!(visible));
+    }
+    app_settings_save(&settings);
 }
 
 pub fn app_settings_save(value: &serde_json::Value) {
