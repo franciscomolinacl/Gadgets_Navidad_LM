@@ -9,7 +9,7 @@ use tauri::menu::{
 };
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    App, AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 /// Script inyectado en cada gadget: arrastre libre con clic izquierdo.
@@ -19,7 +19,7 @@ const GADGET_DRAG_INIT: &str = r#"
 (() => {
   let enabled = __ENABLED__;
   const THRESHOLD = 4;
-  let armed = false, startX = 0, startY = 0;
+  let armed = false, startX = 0, startY = 0, dragging = false;
   const CLICKABLE = new Set(["A","BUTTON","INPUT","SELECT","TEXTAREA","LABEL","SUMMARY"]);
   const ROLES = new Set(["button","link","menuitem","tab","checkbox","radio","switch","option"]);
   function isInteractive(el) {
@@ -36,6 +36,18 @@ const GADGET_DRAG_INIT: &str = r#"
     }
     return false;
   }
+  function reportDragEnd() {
+    if (dragging) {
+      dragging = false;
+      try {
+        const pos = window.__TAURI__.window.getCurrentWindow().innerPosition();
+        pos.then(p => {
+          const sf = window.devicePixelRatio || 1;
+          window.__TAURI__.event.emit("gadget:drag-end", { name: NAME, x: Math.round(p.x / sf), y: Math.round(p.y / sf) });
+        }).catch(() => {});
+      } catch (_) {}
+    }
+  }
   document.addEventListener("mousedown", (e) => {
     if (!enabled || e.button !== 0 || e.defaultPrevented) return;
     if (!(e.target instanceof Element) || blocked(e.target)) return;
@@ -49,10 +61,14 @@ const GADGET_DRAG_INIT: &str = r#"
     if (!(e.buttons & 1)) { armed = false; return; }
     if (Math.hypot(e.clientX - startX, e.clientY - startY) > THRESHOLD) {
       armed = false;
+      dragging = true;
       window.__TAURI_INTERNALS__.invoke("plugin:window|start_dragging");
     }
   });
-  const disarm = () => { armed = false; };
+  const disarm = () => {
+    armed = false;
+    reportDragEnd();
+  };
   document.addEventListener("mouseup", disarm);
   window.addEventListener("blur", disarm);
   const registerToggle = () => {
@@ -320,7 +336,8 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
 
     let draggable = bool_field(&cfg, "draggable", true) && !fullscreen;
     let drag_script = GADGET_DRAG_INIT
-        .replace("__ENABLED__", if draggable { "true" } else { "false" });
+        .replace("__ENABLED__", if draggable { "true" } else { "false" })
+        .replace("__NAME__", &serde_json::json!(name).to_string());
     let ctx_script = GADGET_CONTEXT_MENU.replace(
         "__NAME__",
         &serde_json::json!(name).to_string(),
@@ -343,31 +360,29 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
         raise_panel_if_visible(app);
     }
 
-    // Persistir posicion al mover.
-    // En Linux/X11 el evento `Moved` reporta la posicion del marco (outer), que
-    // difiere de la posicion del cliente por el alto del marco del WM. Como
-    // `set_position` usa coordenadas del cliente, persistimos `inner_position`
-    // para que la posicion guardada coincida con la aplicada al reiniciar.
+    // Persistir posicion solo al terminar el arrastre (emitido desde JS)
     let name_owned = name.to_string();
-    let win_for_move = win.clone();
-    win.on_window_event(move |event| {
-        if let WindowEvent::Moved(_) = event {
+    let app_handle = app.clone();
+    let _unlisten = app.listen("gadget:drag-end", move |event| {
+        let payload = event.payload();
+        if let Ok(data) = serde_json::from_str::<serde_json::Value>(payload) {
+            let event_name = data.get("name").and_then(|v| v.as_str()).unwrap_or("");
+            if event_name != name_owned {
+                return;
+            }
+            let lx = data.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
+            let ly = data.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let cfgm = config::load_gadget_config(&name_owned);
             if bool_field(&cfgm, "fullscreen", false) {
                 return;
             }
-            let Ok(inner) = win_for_move.inner_position() else {
-                return;
-            };
-            let sf = win_for_move.scale_factor().unwrap_or(1.0);
-            let lx = ((inner.x as f64) / sf).round();
-            let ly = ((inner.y as f64) / sf).round();
             let mut newcfg = cfgm;
             if let Some(obj) = newcfg.as_object_mut() {
                 obj.insert("x".to_string(), serde_json::json!(lx));
                 obj.insert("y".to_string(), serde_json::json!(ly));
             }
             config::save_gadget_config(&name_owned, &newcfg);
+            let _ = app_handle.emit("gadget:config-changed", &name_owned);
         }
     });
 
