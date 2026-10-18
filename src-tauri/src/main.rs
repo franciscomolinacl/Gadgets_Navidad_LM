@@ -9,7 +9,7 @@ use tauri::menu::{
 };
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    App, AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    App, AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 
 /// Script inyectado en cada gadget: arrastre libre con clic izquierdo.
@@ -19,7 +19,7 @@ const GADGET_DRAG_INIT: &str = r#"
 (() => {
   let enabled = __ENABLED__;
   const THRESHOLD = 4;
-  let armed = false, startX = 0, startY = 0, dragging = false;
+  let armed = false, startX = 0, startY = 0;
   const CLICKABLE = new Set(["A","BUTTON","INPUT","SELECT","TEXTAREA","LABEL","SUMMARY"]);
   const ROLES = new Set(["button","link","menuitem","tab","checkbox","radio","switch","option"]);
   function isInteractive(el) {
@@ -36,14 +36,6 @@ const GADGET_DRAG_INIT: &str = r#"
     }
     return false;
   }
-  function reportDragEnd() {
-    if (dragging) {
-      dragging = false;
-      try {
-        window.__TAURI__.event.emit("gadget:drag-end", { name: NAME });
-      } catch (_) {}
-    }
-  }
   document.addEventListener("mousedown", (e) => {
     if (!enabled || e.button !== 0 || e.defaultPrevented) return;
     if (!(e.target instanceof Element) || blocked(e.target)) return;
@@ -57,14 +49,10 @@ const GADGET_DRAG_INIT: &str = r#"
     if (!(e.buttons & 1)) { armed = false; return; }
     if (Math.hypot(e.clientX - startX, e.clientY - startY) > THRESHOLD) {
       armed = false;
-      dragging = true;
       window.__TAURI_INTERNALS__.invoke("plugin:window|start_dragging");
     }
   });
-  const disarm = () => {
-    armed = false;
-    reportDragEnd();
-  };
+  const disarm = () => { armed = false; };
   document.addEventListener("mouseup", disarm);
   window.addEventListener("blur", disarm);
   const registerToggle = () => {
@@ -332,8 +320,7 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
 
     let draggable = bool_field(&cfg, "draggable", true) && !fullscreen;
     let drag_script = GADGET_DRAG_INIT
-        .replace("__ENABLED__", if draggable { "true" } else { "false" })
-        .replace("__NAME__", &serde_json::json!(name).to_string());
+        .replace("__ENABLED__", if draggable { "true" } else { "false" });
     let ctx_script = GADGET_CONTEXT_MENU.replace(
         "__NAME__",
         &serde_json::json!(name).to_string(),
@@ -356,28 +343,23 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
         raise_panel_if_visible(app);
     }
 
-    // Persistir posicion solo al terminar el arrastre (emitido desde JS)
+    // Persistir posición al mover (Moved) con debounce para emitir al panel.
+    // Cada Moved guarda la posición en disco; un hilo duerme 500ms y si no hubo
+    // más Moved en ese lapso, emite gadget:config-changed para refrescar el panel.
     let name_owned = name.to_string();
     let app_handle = app.clone();
-    let label_owned = label.clone();
-    let _ = app.listen("gadget:drag-end", move |event| {
-        let payload = event.payload();
-        if let Ok(data) = serde_json::from_str::<serde_json::Value>(payload) {
-            let event_name = data.get("name").and_then(|v| v.as_str()).unwrap_or("");
-            if event_name != name_owned {
-                return;
-            }
+    let win_for_move = win.clone();
+    let move_seq = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    win.on_window_event(move |event| {
+        if let WindowEvent::Moved(_) = event {
             let cfgm = config::load_gadget_config(&name_owned);
             if bool_field(&cfgm, "fullscreen", false) {
                 return;
             }
-            let Some(win) = app_handle.get_webview_window(&label_owned) else {
+            let Ok(inner) = win_for_move.inner_position() else {
                 return;
             };
-            let Ok(inner) = win.inner_position() else {
-                return;
-            };
-            let sf = win.scale_factor().unwrap_or(1.0);
+            let sf = win_for_move.scale_factor().unwrap_or(1.0);
             let lx = ((inner.x as f64) / sf).round();
             let ly = ((inner.y as f64) / sf).round();
             let mut newcfg = cfgm;
@@ -386,7 +368,22 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
                 obj.insert("y".to_string(), serde_json::json!(ly));
             }
             config::save_gadget_config(&name_owned, &newcfg);
-            let _ = app_handle.emit("gadget:config-changed", serde_json::json!({ "name": name_owned, "config": newcfg }));
+
+            // Debounce: notificar al panel solo cuando el movimiento se detiene.
+            let seq = move_seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            let seq_clone = move_seq.clone();
+            let app_clone = app_handle.clone();
+            let name_clone = name_owned.clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if seq_clone.load(std::sync::atomic::Ordering::SeqCst) == seq {
+                    let cfg = config::load_gadget_config(&name_clone);
+                    let _ = app_clone.emit(
+                        "gadget:config-changed",
+                        serde_json::json!({ "name": name_clone, "config": cfg }),
+                    );
+                }
+            });
         }
     });
 
@@ -564,10 +561,14 @@ fn load_gadget_config(name: String) -> serde_json::Value {
 #[tauri::command]
 fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -> Result<(), String> {
     // Merge: partimos de lo que hay en disco y solo sobrescribimos las claves
-    // que vienen en `config`. Así x/y no se pierden si el panel manda valores viejos.
+    // que vienen en `config`, excepto x/y que solo las controla el arrastre.
+    // Así el panel no puede revertir la posición con valores viejos en memoria.
     let mut merged = config::load_gadget_config(&name);
     if let (Some(dst), Some(src)) = (merged.as_object_mut(), config.as_object()) {
         for (k, v) in src {
+            if k == "x" || k == "y" {
+                continue;
+            }
             dst.insert(k.clone(), v.clone());
         }
     }
