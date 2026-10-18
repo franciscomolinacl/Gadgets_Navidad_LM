@@ -233,6 +233,9 @@ async function selectGadget(name) {
 	} catch (err) {
 		console.error("Error al cargar configuracion de " + name, err);
 	}
+	// Si el gadget esta abierto, subirlo: puede haber quedado detras de
+	// ventanas enfocadas (capa normal). Falla silencioso si no esta abierto.
+	invoke("raise_gadget", { name }).catch(() => {});
 }
 
 function renderConfig(name, config) {

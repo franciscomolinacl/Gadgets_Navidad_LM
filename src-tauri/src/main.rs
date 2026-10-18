@@ -66,6 +66,25 @@ const GADGET_DRAG_INIT: &str = r#"
 })();
 "#;
 
+/// Script inyectado en cada gadget: al cargar el DOM (ventana ya mapeada)
+/// pide al backend subirlo. `set_focus` inmediato al crear no funciona porque
+/// la ventana aun no esta viewable y Muffin ignora la activacion; con este
+/// foco+raise si llega en momento valido y el gadget queda encima de las
+/// ventanas normales (p.ej. el terminal maximizado).
+const GADGET_RAISE: &str = r#"
+(() => {
+  const NAME = __NAME__;
+  const raise = () => {
+    try { window.__TAURI__.core.invoke("raise_gadget", { name: NAME }); } catch (_) {}
+  };
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", raise, { once: true });
+  } else {
+    raise();
+  }
+})();
+"#;
+
 /// Script inyectado en cada gadget: menu contextual con clic derecho.
 /// Tauri 2 no expone `set_context_menu` para ventanas, asi que lo construimos
 /// en JS con un tema propio (mismo dorado/verde del panel).
@@ -325,7 +344,13 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
         "__NAME__",
         &serde_json::json!(name).to_string(),
     );
-    builder = builder.initialization_script(&format!("{drag_script}\n{ctx_script}"));
+    let raise_script = GADGET_RAISE.replace(
+        "__NAME__",
+        &serde_json::json!(name).to_string(),
+    );
+    builder = builder.initialization_script(&format!(
+        "{drag_script}\n{raise_script}\n{ctx_script}"
+    ));
 
     // Sin keep_below: los gadgets son ventanas normales, asi que al crearse se
     // apilan ENCIMA de las ventanas abiertas (antes quedaban invisibles debajo
@@ -337,11 +362,9 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     let win = builder.build()?;
     let _ = win.set_ignore_cursor_events(ignore_mouse);
 
-    // Muffin apila la ventana nueva justo ENCIMA de la que tenía el foco, que
-    // al arrancar puede ser una ventana baja (el gadget quedaba debajo de kitty).
-    // present() (= set_focus en tao) fuerza _NET_ACTIVE_WINDOW: foco + subida
-    // al tope de su capa, asi el gadget queda visible sobre las ventanas.
-    let _ = win.set_focus();
+    // El raise efectivo lo pide el propio gadget (GADGET_RAISE) cuando su DOM
+    // ya cargo: aqui la ventana aun no esta viewable y un set_focus inmediato
+    // lo ignora Muffin ( queda debajo del ancla de foco de ese momento ).
 
     // Un gadget `always_on_top` se apila sobre el panel (misma capa "above").
     // Si el panel esta visible, lo volvemos a subir para que siempre quede
@@ -647,6 +670,20 @@ fn set_gadget_active(app: AppHandle, name: String, active: bool) -> Result<(), S
     result
 }
 
+/// Sube un gadget al tope de su capa (foco + raise via _NET_ACTIVE_WINDOW) y
+/// devuelve el foco al panel si este visible. Lo llama el propio gadget cuando
+/// su webview termina de cargar, y el panel al seleccionarlo en la lista.
+#[tauri::command]
+fn raise_gadget(app: AppHandle, name: String) -> Result<(), String> {
+    let label = gadget_label(&name);
+    let win = app
+        .get_webview_window(&label)
+        .ok_or_else(|| format!("el gadget {name} no esta abierto"))?;
+    let _ = win.set_focus();
+    raise_panel_if_visible(&app);
+    Ok(())
+}
+
 #[tauri::command]
 fn sticky_load() -> String {
     config::sticky_load()
@@ -762,6 +799,7 @@ fn main() {
             save_gadget_config,
             set_gadget_top,
             set_gadget_active,
+            raise_gadget,
             show_panel,
             sticky_load,
             sticky_save,
