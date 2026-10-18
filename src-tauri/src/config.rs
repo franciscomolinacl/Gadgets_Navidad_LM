@@ -120,10 +120,13 @@ pub fn autostart_is_enabled() -> bool {
 pub fn autostart_set(enable: bool) -> std::io::Result<()> {
     let path = autostart_file();
     if !enable {
-        fs::remove_file(&path)?;
+        // Si el archivo no existe, desactivado ya es el estado deseado.
+        let _ = fs::remove_file(&path);
         return Ok(());
     }
     let exe = std::env::current_exe()?;
+    // El spec .desktop exige escapar '%' y entrecomillar rutas con espacios.
+    let exec = format!("\"{}\"", exe.display().to_string().replace('%', "%%"));
     let content = format!(
         "[Desktop Entry]\n\
          Type=Application\n\
@@ -133,12 +136,14 @@ pub fn autostart_set(enable: bool) -> std::io::Result<()> {
          Icon=gadgets-navidenos\n\
          Terminal=false\n\
          X-GNOME-Autostart-enabled=true\n",
-        exe.display()
+        exec
     );
     if let Some(dir) = path.parent() {
         ensure_dir(dir);
     }
-    fs::write(&path, content)
+    fs::write(&path, content)?;
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
 }
 
 pub fn gadget_config_path(name: &str) -> PathBuf {

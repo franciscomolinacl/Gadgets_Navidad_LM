@@ -434,8 +434,8 @@ profileNameInput.addEventListener("blur", () => {
 // ---- Arranque automatico ----
 async function initAutostart() {
 	const seg = buildSeg(await invoke("autostart_get"));
-	autostartSeg.className = seg.wrap.className;
-	autostartSeg.innerHTML = seg.wrap.innerHTML;
+	// Mover los nodos (no copiar innerHTML) para conservar los listeners.
+	autostartSeg.replaceChildren(...seg.wrap.childNodes);
 	seg.input.addEventListener("change", async () => {
 		try {
 			await invoke("autostart_set", { enable: seg.input.checked });

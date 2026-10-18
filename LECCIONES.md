@@ -155,6 +155,67 @@ guarda. El `label for=` de la fila también sigue toggleando el mismo input.
 Para localizarlo en pantalla se busca el segmento activo por color dorado
 (`#d4af37`→`#b8963a`) con agrupación de componentes conexos.
 
+## Bug: "Arrancar al inicio" no respondía al clic (2026-10-17)
+
+### Síntoma
+El segmentado OFF|ON de la fila "Arrancar al inicio" no se movía al hacer clic
+y el arranque automático nunca se activaba (no se creaba el `.desktop`).
+
+### Causa
+`initAutostart()` (`frontend/control.js`) hacía:
+```js
+const seg = buildSeg(await invoke("autostart_get"));
+autostartSeg.className = seg.wrap.className;
+autostartSeg.innerHTML = seg.wrap.innerHTML;   // copia, pierde listeners
+```
+`buildSeg()` engancha los listeners de clic a los nodos originales, que **nunca
+se insertaron en el DOM**. Copiar `innerHTML` crea nodos nuevos *sin* listeners:
+ni `paint()` ni `invoke("autostart_set")` se ejecutaban. Los segmentados de las
+filas de gadget funcionaban porque ahí se inserta `seg.wrap` completo.
+
+### Solución
+Mover los nodos en vez de copiarlos (mover conserva los listeners):
+```js
+autostartSeg.replaceChildren(...seg.wrap.childNodes);
+```
+Regla: `buildSeg()` siempre debe insertarse tal cual (`control.js`, renderConfig)
+o repartiéndose con `replaceChildren`/`appendChild` sobre sus nodos.
+
+### Hardening del backend (`src-tauri/src/config.rs`, `autostart_set`)
+- `Exec="ruta"` entrecomillado (rutas con espacios, p. ej. binario de un
+  AppImage montado en `/tmp/.mount_...`) y `%` escapado como `%%`.
+- `fs::remove_file` con `let _ =` (si no existe, desactivado ya es el estado).
+- `chmod 0755` al `.desktop` tras escribirlo.
+
+### Verificación
+XTest sobre el segmentado: clic en ON → el blob dorado salta de x≈148 a x≈188
+(mitad ON) y aparece `~/.config/autostart/gadgets-navidenos.desktop` con
+permisos 755; clic en OFF → el blob vuelve y el archivo se elimina. Los
+segmentados de gadgets (fila booleana) siguen respondiendo igual.
+
+## Pruebas de UI: `warp_pointer` no mueve el puntero (VM) (2026-10-17)
+
+### Síntoma
+Toda la automatización con Xlib quedaba "muda": clics que no hacían nada,
+ventanas que no se movían, blobs dorados sin cambiar.
+
+### Causa
+En la VM (VirtualBox con integración de ratón) el puntero lo gobierna el host:
+`Display.warp_pointer(x, y)` se ignora y el cursor queda clavado en la esquina
+(1919,965). Todos los `ButtonPress` synthetic caían ahí, no sobre la ventana.
+
+### Solución
+Movimiento **absoluto vía XTest** (funciona):
+```python
+xtest.fake_input(d, X.MotionNotify, 0, root=root, x=rx, y=ry)
+d.sync(); time.sleep(0.2)
+xtest.fake_input(d, X.ButtonPress, 1); d.sync()
+xtest.fake_input(d, X.ButtonRelease, 1); d.sync()
+```
+`detail=0` = absoluto (con `root`/`x`/`y`); `detail=1` = relativo. Confirmar con
+`root.query_pointer()` que el hijo bajo el cursor es la ventana esperada antes
+de pulsar.
+
 
 ## El Tiempo: búsqueda de ciudad (geocoding)
 
