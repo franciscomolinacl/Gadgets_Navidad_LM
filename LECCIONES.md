@@ -363,19 +363,37 @@ maximizadas como el terminal).
 
 ### Solución aplicada (2026-10-18)
 - Los gadgets con `_alwaysTop:false` ahora son **ventanas normales** (sin `keep_below`).
-- En `create_gadget` se inyecta `GADGET_RAISE` (DOM loaded) → llama `raise_gadget`
-  (set_focus + raise) para subirlos al tope de su capa, evitando que queden debajo
-  de la ventana con foco al arrancar.
+- En `create_gadget` se inyecta `GADGET_RAISE` (DOM loaded, con reintentos a
+  0/400/1200/2500ms) → llama `raise_gadget` para subirlos al tope de su capa.
 - `selectGadget()` del panel también invoca `raise_gadget` si el gadget está abierto.
 - Al cambiar `_alwaysTop` se limpia `keep_below`.
 - Resultado: gadgets visibles sobre ventanas abiertas; el panel (ABOVE) sigue sobre ellos.
 
+### Diferencia debug vs AppImage (2026-10-18) — causa raíz del bug "funciona en
+### debug pero no en el AppImage"
+- En debug el binario + frontend van sin optimizar y el DOM tarda más en cargar,
+  por lo que el `set_focus` del `DOMContentLoaded` llega **después** de que X mapee
+  la ventana → Muffin lo aplica.
+- En el AppImage los assets van embebidos: el DOM carga muy rápido, el `set_focus`
+  llega **antes** de que la ventana esté viewable → **Muffin lo ignora
+  silenciosamente** (`set_focus` devuelve `Ok` igual, pero `is_focused()` sigue
+  en `false` y la ventana queda debajo de la maximizada). Reproductor, Vela y
+  Villancico (los que se auto-activan al arrancar) eran los visibles.
+- **Solución**: `raise_gadget` reintenta `set_focus` (5 × 150ms) y si aún no hay
+  foco ejecuta `wmctrl -a <título>` — el mismo `_NET_ACTIVE_WINDOW` que enviaría un
+  pager, que Muffin acepta aunque la app no tenga interacción previa
+  (focus-prevention). Además `GADGET_RAISE` reintenta el invoke en
+  0/400/1200/2500ms por si el IPC no está listo en el primer intento.
+
 ### Lección
 Antes de diagnosticar un gadget "que no renderiza", confirmar con
 `xwininfo -root -tree`/`xprop _NET_CLIENT_LIST_STACKING` qué ventana cubre su
-posición. Con ventanas normales basta `wmctrl -a` para subirlos; hay que tener
-cuidado con set_focus inmediatamente después de `build()` en algunos WMs (puede
-ignorar el evento): mejor elevar cuando el contenido ya está visible.
+posición. Si funciona en debug pero no en release/AppImage, sospechar de
+**timing** (carga de assets embebidos vs disco) y verificar con logs de
+`is_focused()` si el WM está aceptando la activación. `wmctrl -a` es un buen
+fallback para forzar `_NET_ACTIVE_WINDOW` sin depender de focus-prevention.
+Cuidado con `pkill -x gadgets-navidenos-tauri`: no matchea (nombres >15 chars
+se truncan a `gadgets-naviden`); usar `pkill -x gadgets-naviden` o `pkill -f`.
 
 ## Crash/bug: `resizable(false)` fuerza mínimo 200px en Linux (2026-10-17)
 
