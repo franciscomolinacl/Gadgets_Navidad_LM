@@ -264,7 +264,8 @@ function renderConfig(name, config) {
 	form.className = "config-form";
 
 	Object.entries(config).forEach(([key, value]) => {
-		if (key.startsWith("_comment") || key === "fullscreen") {
+		const k = key.toLowerCase();
+		if (k.startsWith("_comment") || k === "comentario" || k === "comment" || key === "fullscreen" || key === "lat" || key === "lon" || key === "city") {
 			return;
 		}
 

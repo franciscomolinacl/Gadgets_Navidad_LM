@@ -6,7 +6,7 @@
   "height": 180,
   "x": 0,
   "y": 0,
-  "Comentario": "REVISAR LAT Y LON EN https://open-meteo.com/en/docs/geocoding-api?name=",
+  "_comentario": "REVISAR LAT Y LON EN https://open-meteo.com/en/docs/geocoding-api?name=",
   "lat": -33.0510985,
   "lon": -71.6222294,
   "fullscreen": false,
