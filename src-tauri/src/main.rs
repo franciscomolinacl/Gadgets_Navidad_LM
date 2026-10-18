@@ -71,16 +71,25 @@ const GADGET_DRAG_INIT: &str = r#"
 /// la ventana aun no esta viewable y Muffin ignora la activacion; con este
 /// foco+raise si llega en momento valido y el gadget queda encima de las
 /// ventanas normales (p.ej. el terminal maximizado).
+///
+/// En el AppImage los assets van embebidos y el DOM carga muy rapido: el
+/// primer `set_focus` llega antes de que X mapee la ventana y Muffin lo
+/// ignora (el gadget quedaba debajo de la ventana maximizada). Por eso el
+/// backend reintenta hasta ver `is_focused()`, y el JS tambien reintenta por
+/// si el IPC aun no esta listo en el primer intento.
 const GADGET_RAISE: &str = r#"
 (() => {
   const NAME = __NAME__;
   const raise = () => {
     try { window.__TAURI__.core.invoke("raise_gadget", { name: NAME }); } catch (_) {}
   };
+  const schedule = () => {
+    [0, 400, 1200, 2500].forEach(ms => setTimeout(raise, ms));
+  };
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", raise, { once: true });
+    document.addEventListener("DOMContentLoaded", schedule, { once: true });
   } else {
-    raise();
+    schedule();
   }
 })();
 "#;
@@ -673,13 +682,34 @@ fn set_gadget_active(app: AppHandle, name: String, active: bool) -> Result<(), S
 /// Sube un gadget al tope de su capa (foco + raise via _NET_ACTIVE_WINDOW) y
 /// devuelve el foco al panel si este visible. Lo llama el propio gadget cuando
 /// su webview termina de cargar, y el panel al seleccionarlo en la lista.
+///
+/// En el AppImage el primer set_focus llega antes de que X mapee la ventana y
+/// Muffin lo ignora silenciosamente (devuelve Ok igual). Si tras reintentar no
+/// hay foco, se fuerza con `wmctrl -a` (mismo mensaje _NET_ACTIVE_WINDOW que
+/// enviaria un pager, que Muffin no rechaza por focus-prevention).
 #[tauri::command]
 fn raise_gadget(app: AppHandle, name: String) -> Result<(), String> {
     let label = gadget_label(&name);
     let win = app
         .get_webview_window(&label)
         .ok_or_else(|| format!("el gadget {name} no esta abierto"))?;
-    let _ = win.set_focus();
+    for _ in 0..5 {
+        if win.is_focused().unwrap_or(false) {
+            break;
+        }
+        let _ = win.set_focus();
+        if win.is_focused().unwrap_or(false) {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(150));
+    }
+    if !win.is_focused().unwrap_or(false) {
+        let _ = std::process::Command::new("wmctrl")
+            .args(["-a", &name])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
     raise_panel_if_visible(&app);
     Ok(())
 }
