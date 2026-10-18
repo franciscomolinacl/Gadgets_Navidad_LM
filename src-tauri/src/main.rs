@@ -40,11 +40,7 @@ const GADGET_DRAG_INIT: &str = r#"
     if (dragging) {
       dragging = false;
       try {
-        const pos = window.__TAURI__.window.getCurrentWindow().innerPosition();
-        pos.then(p => {
-          const sf = window.devicePixelRatio || 1;
-          window.__TAURI__.event.emit("gadget:drag-end", { name: NAME, x: Math.round(p.x / sf), y: Math.round(p.y / sf) });
-        }).catch(() => {});
+        window.__TAURI__.event.emit("gadget:drag-end", { name: NAME });
       } catch (_) {}
     }
   }
@@ -363,19 +359,27 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     // Persistir posicion solo al terminar el arrastre (emitido desde JS)
     let name_owned = name.to_string();
     let app_handle = app.clone();
-    let _unlisten = app.listen("gadget:drag-end", move |event| {
+    let label_owned = label.clone();
+    let _ = app.listen("gadget:drag-end", move |event| {
         let payload = event.payload();
         if let Ok(data) = serde_json::from_str::<serde_json::Value>(payload) {
             let event_name = data.get("name").and_then(|v| v.as_str()).unwrap_or("");
             if event_name != name_owned {
                 return;
             }
-            let lx = data.get("x").and_then(|v| v.as_f64()).unwrap_or(0.0);
-            let ly = data.get("y").and_then(|v| v.as_f64()).unwrap_or(0.0);
             let cfgm = config::load_gadget_config(&name_owned);
             if bool_field(&cfgm, "fullscreen", false) {
                 return;
             }
+            let Some(win) = app_handle.get_webview_window(&label_owned) else {
+                return;
+            };
+            let Ok(inner) = win.inner_position() else {
+                return;
+            };
+            let sf = win.scale_factor().unwrap_or(1.0);
+            let lx = ((inner.x as f64) / sf).round();
+            let ly = ((inner.y as f64) / sf).round();
             let mut newcfg = cfgm;
             if let Some(obj) = newcfg.as_object_mut() {
                 obj.insert("x".to_string(), serde_json::json!(lx));
@@ -559,36 +563,44 @@ fn load_gadget_config(name: String) -> serde_json::Value {
 
 #[tauri::command]
 fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -> Result<(), String> {
-    config::save_gadget_config(&name, &config);
+    // Merge: partimos de lo que hay en disco y solo sobrescribimos las claves
+    // que vienen en `config`. Así x/y no se pierden si el panel manda valores viejos.
+    let mut merged = config::load_gadget_config(&name);
+    if let (Some(dst), Some(src)) = (merged.as_object_mut(), config.as_object()) {
+        for (k, v) in src {
+            dst.insert(k.clone(), v.clone());
+        }
+    }
+    config::save_gadget_config(&name, &merged);
 
     let label = gadget_label(&name);
     if let Some(win) = app.get_webview_window(&label) {
         if let (Some(x), Some(y)) = (
-            config.get("x").and_then(|v| v.as_f64()),
-            config.get("y").and_then(|v| v.as_f64()),
+            merged.get("x").and_then(|v| v.as_f64()),
+            merged.get("y").and_then(|v| v.as_f64()),
         ) {
             let _ = win.set_position(tauri::LogicalPosition::new(x, y));
         }
         if let (Some(w), Some(h)) = (
-            config.get("width").and_then(|v| v.as_f64()),
-            config.get("height").and_then(|v| v.as_f64()),
+            merged.get("width").and_then(|v| v.as_f64()),
+            merged.get("height").and_then(|v| v.as_f64()),
         ) {
             let _ = win.set_size(tauri::LogicalSize::new(w, h));
         }
-        let always_top = bool_field(&config, "_alwaysTop", false);
+        let always_top = bool_field(&merged, "_alwaysTop", false);
         let _ = win.set_always_on_top(always_top);
         let _ = win.set_always_on_bottom(!always_top);
         if always_top {
             raise_panel_if_visible(&app);
         }
-        let ignore_mouse = bool_field(&config, "ignoreMouse", false);
+        let ignore_mouse = bool_field(&merged, "ignoreMouse", false);
         let _ = win.set_ignore_cursor_events(ignore_mouse);
-        let draggable = bool_field(&config, "draggable", true)
-            && !bool_field(&config, "fullscreen", false);
+        let draggable = bool_field(&merged, "draggable", true)
+            && !bool_field(&merged, "fullscreen", false);
         let _ = win.emit("gadget:drag", draggable);
     }
 
-    let active = bool_field(&config, "_active", false);
+    let active = bool_field(&merged, "_active", false);
     if active && app.get_webview_window(&label).is_none() {
         create_gadget(&app, &name).map_err(|e| e.to_string())?;
     } else if !active {
