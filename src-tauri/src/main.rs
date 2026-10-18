@@ -337,6 +337,12 @@ fn create_gadget(app: &AppHandle, name: &str) -> tauri::Result<()> {
     let win = builder.build()?;
     let _ = win.set_ignore_cursor_events(ignore_mouse);
 
+    // Muffin apila la ventana nueva justo ENCIMA de la que tenía el foco, que
+    // al arrancar puede ser una ventana baja (el gadget quedaba debajo de kitty).
+    // present() (= set_focus en tao) fuerza _NET_ACTIVE_WINDOW: foco + subida
+    // al tope de su capa, asi el gadget queda visible sobre las ventanas.
+    let _ = win.set_focus();
+
     // Un gadget `always_on_top` se apila sobre el panel (misma capa "above").
     // Si el panel esta visible, lo volvemos a subir para que siempre quede
     // accesible por encima de los gadgets.
