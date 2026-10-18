@@ -357,22 +357,25 @@ Las capturas mostraban texto/ventanas que no eran el gadget: parecía que el
 gadget no renderizaba, su altura era rara, no aparecían los colores, etc.
 
 ### Causa
-Los gadgets se crean con `_alwaysTop:false` → `always_on_bottom(true)`, o sea
-en la capa **ABOVE baja**. El **terminal OpenCode (kitty) está a pantalla
-completa** (`1280x728+0+32`) y tapa todo lo que esté debajo, incluidos los
-gadgets. `gnome-screenshot` captura el terminal, no el gadget.
+Originalmente los gadgets se creaban con `_alwaysTop:false` → `always_on_bottom(true)`,
+lo que dejaba la ventana en la capa **BELOW** (detrás de ventanas normales
+maximizadas como el terminal).
 
-### Solución para verificar/ver un gadget
-- Poner el gadget a la vista temporalmente con `_alwaysTop:true` en su config y
-  reiniciar, **o**
-- `wmctrl -a "<nombre>"` para activarlo/subirlo, **o** cerrar/minimizar el
-  terminal.
+### Solución aplicada (2026-10-18)
+- Los gadgets con `_alwaysTop:false` ahora son **ventanas normales** (sin `keep_below`).
+- En `create_gadget` se inyecta `GADGET_RAISE` (DOM loaded) → llama `raise_gadget`
+  (set_focus + raise) para subirlos al tope de su capa, evitando que queden debajo
+  de la ventana con foco al arrancar.
+- `selectGadget()` del panel también invoca `raise_gadget` si el gadget está abierto.
+- Al cambiar `_alwaysTop` se limpia `keep_below`.
+- Resultado: gadgets visibles sobre ventanas abiertas; el panel (ABOVE) sigue sobre ellos.
 
 ### Lección
 Antes de diagnosticar un gadget "que no renderiza", confirmar con
-`xwininfo -root -tree` qué ventana cubre su posición y cuál es su orden de
-apilamiento. Un gadget `always_on_bottom` bajo una ventana maximizada es
-invisible en las capturas aunque esté perfecto.
+`xwininfo -root -tree`/`xprop _NET_CLIENT_LIST_STACKING` qué ventana cubre su
+posición. Con ventanas normales basta `wmctrl -a` para subirlos; hay que tener
+cuidado con set_focus inmediatamente después de `build()` en algunos WMs (puede
+ignorar el evento): mejor elevar cuando el contenido ya está visible.
 
 ## Crash/bug: `resizable(false)` fuerza mínimo 200px en Linux (2026-10-17)
 
