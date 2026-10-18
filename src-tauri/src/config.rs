@@ -15,13 +15,13 @@ fn ensure_dir(dir: &Path) {
 
 /// Crea el archivo con `initial` solo si no existe.
 fn ensure_file(path: &Path, initial: &str) {
-    if path.exists() {
+    if path.exists() && fs::metadata(path).map(|m| m.len() > 0).unwrap_or(false) {
         return;
     }
     if let Some(dir) = path.parent() {
         ensure_dir(dir);
     }
-    let _ = fs::write(path, initial);
+    write_atomic(path, initial);
 }
 
 pub fn notas_path() -> PathBuf {
@@ -45,12 +45,21 @@ fn load_json_file(path: &Path, initial: &str) -> serde_json::Value {
         .unwrap_or_else(|| serde_json::from_str(initial).unwrap_or(serde_json::json!({})))
 }
 
+/// Escribe atómicamente: primero a un .tmp y luego rename. Evita que un kill
+/// en medio de la escritura deje el archivo vacío o a medias.
+fn write_atomic(path: &Path, content: &str) {
+    let tmp = path.with_extension("json.tmp");
+    if fs::write(&tmp, content).is_ok() {
+        let _ = fs::rename(&tmp, path);
+    }
+}
+
 fn save_json_file(path: &Path, value: &serde_json::Value) {
     if let Some(dir) = path.parent() {
         ensure_dir(dir);
     }
     if let Ok(s) = serde_json::to_string_pretty(value) {
-        let _ = fs::write(path, s);
+        write_atomic(path, &s);
     }
 }
 
@@ -176,20 +185,39 @@ pub fn ensure_user_gadget_configs() {
     ensure_file(&perfiles_path(), r#"{"perfiles": []}"#);
     for (name, default_json) in GADGETS {
         let path = gadget_config_path(name);
-        if !path.exists() {
+        if !path.exists() || fs::metadata(&path).map(|m| m.len() == 0).unwrap_or(false) {
             if let Some(dir) = path.parent() {
                 ensure_dir(dir);
             }
-            let _ = fs::write(&path, default_json);
+            write_atomic(&path, default_json);
         }
     }
 }
 
 pub fn load_gadget_config(name: &str) -> serde_json::Value {
-    let mut value = fs::read_to_string(gadget_config_path(name))
+    let path = gadget_config_path(name);
+    let parsed = fs::read_to_string(&path)
         .ok()
-        .and_then(|s| serde_json::from_str(&s).ok())
-        .unwrap_or_else(|| serde_json::json!({}));
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok());
+    // Archivo vacío o corrupto (kill a mitad de escritura): restaurar el
+    // default embebido en vez de devolver {} (el panel perdería controles).
+    let mut value = match parsed {
+        Some(v) if v.is_object() => v,
+        _ => {
+            let default = GADGETS
+                .iter()
+                .find(|(n, _)| *n == name)
+                .and_then(|(_, cfg)| serde_json::from_str::<serde_json::Value>(cfg).ok())
+                .unwrap_or_else(|| serde_json::json!({}));
+            if let Some(dir) = path.parent() {
+                ensure_dir(dir);
+            }
+            if let Ok(s) = serde_json::to_string_pretty(&default) {
+                write_atomic(&path, &s);
+            }
+            default
+        }
+    };
     if let Some(obj) = value.as_object_mut() {
         obj.entry("draggable".to_string())
             .or_insert(serde_json::json!(true));
@@ -203,7 +231,7 @@ pub fn save_gadget_config(name: &str, config: &serde_json::Value) {
         ensure_dir(dir);
     }
     if let Ok(s) = serde_json::to_string_pretty(config) {
-        let _ = fs::write(path, s);
+        write_atomic(&path, &s);
     }
 }
 
@@ -222,7 +250,7 @@ pub fn sticky_save(text: &str) {
     }
     let value = serde_json::json!({ "text": text });
     if let Ok(s) = serde_json::to_string_pretty(&value) {
-        let _ = fs::write(path, s);
+        write_atomic(&path, &s);
     }
 }
 
