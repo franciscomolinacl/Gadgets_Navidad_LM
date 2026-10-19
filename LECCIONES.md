@@ -716,3 +716,22 @@ mal (salta a otra parte). Hay que medir la señal de salida:
   envía `Access-Control-Allow-Origin: *` igual (inofensivo, puerto+token local).
 - Empaquetar AppImage: `PATH="$HOME/.local/bin:$PATH" cargo tauri build
   --bundles appimage`.
+
+---
+
+## Publicación en GitHub (2026-10-19)
+
+- Repo: https://github.com/franciscomolinacl/Gadgets_Navidad_LM (rama `main`).
+- Remoto SSH: `git@github.com:franciscomolinacl/Gadgets_Navidad_LM.git`
+  (clave `~/.ssh/id_ed25519`, sin passphrase).
+- Release `v2.0.0` publicada con AppImage (188,6 MiB) y `.deb` (30,4 MiB).
+- `gh` 2.102.0 en `~/.local/bin` (no está en PATH).
+- Con un PAT classic, `gh auth login --with-token` falla con
+  `missing required scope 'read:org'`; usar `GH_TOKEN=$(cat archivo)` y
+  ejecutar `gh` directamente (funciona con scope `repo`).
+- Subir el tag `v2.0.0` ANTES del workflow para que no dispare CI.
+- Workflow `.github/workflows/build.yml`: ubuntu-22.04, Rust stable,
+  `cargo install tauri-cli`, `cargo tauri build --bundles appimage,deb`,
+  `softprops/action-gh-release` (draft) en tags `v*`.
+- Screenshots para el README no capturados: mover ventanas en la VM (escala 2)
+  cuelga la app ("no responde"). Pendiente hacerlas fuera de la VM o manualmente.
