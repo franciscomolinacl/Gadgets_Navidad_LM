@@ -23,6 +23,7 @@ let currentIndex = 0;
 let audio = null;
 let bars;
 let lastVolume = 1;
+let mediaBase = '';
 
 const imageExtensions = ['.jpg', '.jpeg', '.png'];
 
@@ -32,15 +33,6 @@ function songLabel(file) {
 
 function isExternal(file) {
 	return file.startsWith('/');
-}
-
-function dataUriToBlob(dataUri) {
-	const comma = dataUri.indexOf(',');
-	const mime = dataUri.slice(5, dataUri.indexOf(';'));
-	const bin = atob(dataUri.slice(comma + 1));
-	const bytes = new Uint8Array(bin.length);
-	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-	return new Blob([bytes], { type: mime });
 }
 
 function updatePlaylistHighlight() {
@@ -92,36 +84,21 @@ function render() {
 	});
 }
 
-// El backend GStreamer de WebKitGTK no puede reproducir el esquema custom
-// "tauri://", asi que el archivo se resuelve a un blob URL via fetch.
-// Para rutas externas el backend entrega un data URI que se convierte a Blob.
-async function resolveSrc(file) {
-	if (isExternal(file)) {
-		try {
-			const dataUri = await invoke('media_file_data_uri', { path: file });
-			return URL.createObjectURL(dataUriToBlob(dataUri));
-		} catch (e) {
-			console.error('No se pudo leer el archivo:', file, e);
-			return '';
-		}
-	}
-	const url = encodeURI(file);
-	try {
-		const res = await fetch(url);
-		const blob = await res.blob();
-		return URL.createObjectURL(blob);
-	} catch (e) {
-		return url;
-	}
+// WebKitGTK no reproduce audio desde esquemas custom (tauri://) ni desde blob
+// (al estimar duración salta a ~50% del archivo). El backend expone un HTTP
+// local con soporte de Range, que es la única vía fiable en Linux.
+function resolveSrc(file) {
+	const parts = isExternal(file)
+		? ['f', file]
+		: ['a', 'Reproductor', ...file.split('/')];
+	return mediaBase + '/' + parts.map(encodeURIComponent).join('/');
 }
 
 async function loadSong(index) {
 	const file = playlist[index];
 	if (!file) return;
-	const src = await resolveSrc(file);
+	const src = resolveSrc(file);
 	if (!src) return;
-	if (audio.__blobUrl) URL.revokeObjectURL(audio.__blobUrl);
-	audio.__blobUrl = src.startsWith('blob:') ? src : null;
 	audio.src = src;
 	songNameEl.textContent = songLabel(file);
 	songNameEl.style.animationDuration = (window.__marqueeSpeed || 50) + 's';
@@ -174,6 +151,7 @@ function bindControls() {
 async function loadLibrary() {
 	cfg = await invoke('load_gadget_config', { name: 'Reproductor' });
 	window.__marqueeSpeed = cfg.marqueeSpeed || 50;
+	mediaBase = await invoke('media_server_base');
 
 	const files = await invoke('gadget_media_files', {
 		name: 'Reproductor',

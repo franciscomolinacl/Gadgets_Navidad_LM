@@ -17,6 +17,38 @@ fn is_media_file(name: &str) -> bool {
         || lower.ends_with(".webp")
 }
 
+fn is_audio_file(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    [
+        ".mp3", ".wav", ".ogg", ".oga", ".opus", ".m4a", ".aac", ".flac", ".mp4", ".webm",
+        ".mkv", ".mov", ".m4v", ".ogv",
+    ]
+    .iter()
+    .any(|ext| lower.ends_with(ext))
+}
+
+/// Recorre el gadget juntando el audio/video con su ruta relativa y absoluta.
+fn collect_audio(dir: &Path, rel: &String, out: &mut Vec<(String, String)>) {
+    let read = match fs::read_dir(dir) {
+        Ok(r) => r,
+        Err(_) => return,
+    };
+    for e in read.flatten() {
+        let path = e.path();
+        let fname = e.file_name().to_string_lossy().to_string();
+        let sub_rel = if rel.is_empty() {
+            fname.clone()
+        } else {
+            format!("{rel}/{fname}")
+        };
+        if path.is_dir() {
+            collect_audio(&path, &sub_rel, out);
+        } else if is_audio_file(&fname) {
+            out.push((sub_rel, path.to_string_lossy().to_string()));
+        }
+    }
+}
+
 fn collect_media(dir: &Path, rel: &String, out: &mut Vec<String>) {
     let read = match fs::read_dir(dir) {
         Ok(r) => r,
@@ -57,6 +89,7 @@ fn generate_gadgets_manifest() {
 
     let mut entries: Vec<(String, String)> = Vec::new();
     let mut media: Vec<(String, Vec<String>)> = Vec::new();
+    let mut audio: Vec<(String, Vec<(String, String)>)> = Vec::new();
 
     if let Ok(read) = fs::read_dir(&gadgets_dir) {
         for e in read.flatten() {
@@ -73,12 +106,20 @@ fn generate_gadgets_manifest() {
             collect_media(&path, &String::new(), &mut files);
             files.sort();
             if !files.is_empty() {
-                media.push((name, files));
+                media.push((name.clone(), files));
+            }
+
+            let mut sounds = Vec::new();
+            collect_audio(&path, &String::new(), &mut sounds);
+            sounds.sort();
+            if !sounds.is_empty() {
+                audio.push((name, sounds));
             }
         }
     }
     entries.sort_by(|a, b| a.0.cmp(&b.0));
     media.sort_by(|a, b| a.0.cmp(&b.0));
+    audio.sort_by(|a, b| a.0.cmp(&b.0));
 
     let mut code = String::from("pub const GADGETS: &[(&str, &str)] = &[\n");
     for (name, cfg) in &entries {
@@ -93,6 +134,17 @@ fn generate_gadgets_manifest() {
             code.push_str(&format!("        {:?},\n", f));
         }
         code.push_str("    ]),\n");
+    }
+    code.push_str("];\n");
+
+    code.push_str("pub const GADGET_AUDIO: &[(&str, &str, &[u8])] = &[\n");
+    for (name, files) in &audio {
+        for (rel, abs) in files {
+            code.push_str(&format!(
+                "    ({:?}, {:?}, include_bytes!(r#\"{}\"#)),\n",
+                name, rel, abs
+            ));
+        }
     }
     code.push_str("];\n");
 

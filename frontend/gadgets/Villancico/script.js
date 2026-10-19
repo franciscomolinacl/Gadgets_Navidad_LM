@@ -7,13 +7,15 @@ const audio = document.getElementById('audio');
 const notesContainer = document.getElementById('notes');
 const title = document.querySelector('h3');
 let interval;
+let mediaBase = '';
 
 async function loadVillancico() {
 	try {
+		mediaBase = await invoke('media_server_base');
 		const files = await invoke('gadget_media_files', { name: 'Villancico', subfolder: null });
 		const mp3 = files.find((f) => f.toLowerCase().endsWith('.mp3'));
 		if (mp3 && audio) {
-			audio.src = await resolveSrc(mp3);
+			audio.src = resolveSrc(mp3);
 			title.textContent = decodeURIComponent(mp3).replace(/\.mp3$/i, '') + ' 🎵';
 		} else {
 			title.textContent = 'Sin villancico 🎵';
@@ -24,17 +26,11 @@ async function loadVillancico() {
 	}
 }
 
-// GStreamer (backend de WebKitGTK) no reproduce el esquema custom "tauri://",
-// asi que el archivo se resuelve a un blob URL via fetch.
-async function resolveSrc(file) {
-	const url = encodeURI(file);
-	try {
-		const res = await fetch(url);
-		const blob = await res.blob();
-		return URL.createObjectURL(blob);
-	} catch (e) {
-		return url;
-	}
+// WebKitGTK no reproduce audio desde esquemas custom (tauri://) ni desde blob
+// (al estimar duración salta a ~50% del archivo). El backend expone un HTTP
+// local con soporte de Range, que es la única vía fiable en Linux.
+function resolveSrc(file) {
+	return mediaBase + '/a/Villancico/' + file.split('/').map(encodeURIComponent).join('/');
 }
 
 function createNote() {

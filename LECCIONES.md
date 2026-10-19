@@ -572,8 +572,10 @@ bordes. Alternativa (no aplicada): fijar tamaño con
 
 ## PENDIENTE: el audio no suena dentro de la app (2026-10-18)
 
-**Estado: sin resolver. Se retoma manana.** No tocar nada mas de audio hasta
-cerrar el diagnostico.
+**RESUELTO el 2026-10-19. Ver "Audio: causa raíz y fix definitivo" al final
+del archivo.** El diagnóstico de abajo quedó superado; se conserva como
+historial. Resumen: eran DOS problemas distintos (mudo por Web Audio, y el
+salto a ~50% por no soportar Range).
 
 ### Sintoma
 Ningun gadget reproduce audio en la app (Reproductor y Villancico). Falla tanto
@@ -640,3 +642,77 @@ el AppImage. En modo plan solo se diagnostico (lectura).
   verde/rojo, labels Mensaje/Firma y canal `opened` oculto.
 - AppImage empaquetado **con** GStreamer (`bundleMediaFramework: true`) e
   `patchelf` estatico en `~/.local/bin/patchelf` (prefixar PATH al empaquetar).
+
+## Audio: causa raíz y fix definitivo (2026-10-19)
+
+### Resultado
+Los tres audios suenan correctos desde el inicio y sin saltos:
+Reproductor canción 1, canción 2 y Villancico. Verificado midiendo el audio
+real (no `currentTime`).
+
+### Método de verificación (clave: NO confiar en `currentTime`)
+`currentTime` del elemento va suave y correcto AUNQUE el audio audible esté
+mal (salta a otra parte). Hay que medir la señal de salida:
+1. Grabar el monitor de PipeWire:
+   `parec -d alsa_output.pci-0000_00_05.0.analog-stereo.monitor
+   --format=s16le --rate=8000 --channels=1 > /tmp/rec.raw`
+2. Decodificar el MP3 de referencia a PCM 8 kHz mono con
+   `gst-launch-1.0 filesrc location=X ! decodebin ! audioconvert !
+   audioresample ! audio/x-raw,format=S16LE,channels=1,rate=8000 ! filesink`.
+3. Envolvente RMS (bloques de 20 ms) + correlación de Pearson para ubicar la
+   posición audible en el tiempo. Scripts de trabajo: `/tmp/analyze*.py`.
+4. Alinear por bloques GLOBALES (búsqueda en todo el archivo) y NO encadenar:
+   el encadenado con ventana local ±2 s se "despista" en canciones repetitivas
+   (daba conf 0.4-0.6 y posiciones falsas; global da conf ~1.0 y la posición
+   real). Un bloque de 3 s con corr 1.000 es prueba suficiente.
+
+### Causa raíz 1: WebKitGTK no reproduce audio de protocolos custom → blob
+- `tauri://localhost/...` (esquema interno) da `NotSupportedError` (`error.code=4`)
+  en `<audio>`. Confirmado en el upstream: WebKitGTK no acepta esquemas
+  desconocidos para media (tauri#8654).
+- Workaround aplicado antes: `fetch -> Blob -> URL.createObjectURL`. Hace que
+  suene, pero **rompe la reproducción**.
+
+### Causa raíz 2: sin soporte HTTP `Range`, el audio salta a ~50%
+- Síntoma exacto medido: la canción arranca bien (~1-2 s) y a los ~5 s salta a
+  la MITAD del archivo (canción de 272 s → 136 s) y sigue desde ahí. `currentTime`
+  sigue marcando 0,2,4,... Engaña por completo.
+- Es el "duration probe" de WebKit: cuando la fuente no soporta `Range`, busca
+  el 50% para estimar duración y se queda ahí.
+- El blob (todo en memoria) tampoco soporta Range → mismo salto. Reportes
+  upstream lo confirman (tauri#15472, WebKitGTK 2.52.x): asset:// y blob fallan
+  en Linux; **un HTTP local sí funciona**.
+- Efecto secundario observado: a veces el elemento se queda en `waiting` y no
+  llega a `playing` (silencio total, "la 1 no se escuchaba") → reintentar cargar
+  lo arregla. Mismo origen.
+
+### Fix definitivo: servidor HTTP local con `Range`
+- Nuevo módulo `src-tauri/src/media.rs`: servidor HTTP mínimo con `std`
+  (TcpListener, sin dependencias). Escucha en `127.0.0.1:0` (puerto
+  efímero) con token aleatorio de 16 bytes en la ruta (`/dev/urandom`).
+- Rutas: `/{{token}}/a/<gadget>/<relpath>` (audio embebido) y
+  `/{{token}}/f/<ruta-absoluta-urlencoded>` (carpeta externa del usuario).
+- Responde `206 Partial Content` + `Content-Range` + `Accept-Ranges: bytes`;
+  parsea `bytes=a-b`, `bytes=a-` y sufijo `bytes=-n`. `Connection: close`.
+- El audio embebido se incluye en el binario con `include_bytes!` generado por
+  `build.rs` (`GADGET_AUDIO: &[(&str,&str,&[u8])]`); solo audio/vídeo,
+  no las imágenes (esas van bien por el esquema custom).
+- Frontend: `mediaServerBase()` (comando `media_server_base`) y
+  `resolveSrc()` arma `http://127.0.0.1:<puerto>/<token>/a/<gadget>/<archivo>`.
+  Se eliminó el blob (`dataUriToBlob`, `URL.revokeObjectURL`, `audio.__blobUrl`).
+
+### Código de audio (estado final)
+- `src-tauri/src/media.rs` (nuevo): servidor + parseo de Range.
+- `src-tauri/build.rs`: `is_audio_file`, `collect_audio`, `GADGET_AUDIO`.
+- `src-tauri/src/main.rs`: `mod media;`, `media::start()` en `setup`,
+  comando `media_server_base`.
+- `frontend/gadgets/Reproductor/script.js` y
+  `frontend/gadgets/Villancico/script.js`: `resolveSrc()` por HTTP local.
+
+### Otras lecciones
+- `createMediaElementSource` (Web Audio) en WebKitGTK deja el `<audio>` mudo
+  (reproduce sin error, sin salida). Visualizador decorativo (sin Web Audio).
+- Al medir por `Range`, un `<audio>` sin `crossorigin` no requiere CORS, pero se
+  envía `Access-Control-Allow-Origin: *` igual (inofensivo, puerto+token local).
+- Empaquetar AppImage: `PATH="$HOME/.local/bin:$PATH" cargo tauri build
+  --bundles appimage`.

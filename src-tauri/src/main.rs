@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod config;
+mod media;
 mod monitor;
 
 use tauri::menu::{
@@ -837,6 +838,12 @@ fn window_close(app: AppHandle) {
     set_panel_visible(&app, false);
 }
 
+/// URL base del servidor HTTP local que sirve audio/vídeo al webview.
+#[tauri::command]
+fn media_server_base() -> String {
+    media::base_url()
+}
+
 // Favoritos
 #[tauri::command]
 fn favorites_get() -> Vec<String> {
@@ -910,6 +917,7 @@ fn main() {
     tauri::Builder::default()
         .setup(|app| {
             config::ensure_user_gadget_configs();
+            media::start();
             let handle = app.handle().clone();
             create_tray(app)?;
             for (name, _) in config::GADGETS {
@@ -937,6 +945,7 @@ fn main() {
             sticky_load,
             sticky_save,
             window_close,
+            media_server_base,
             gadget_media_files,
             media_file_data_uri,
             pick_folder,
