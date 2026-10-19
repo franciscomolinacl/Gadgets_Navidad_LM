@@ -40,8 +40,20 @@ const prettyNames = {
 	interval: "Intervalo",
 	effect: "Efecto",
 	marqueeSpeed: "Vel. efecto",
+	message: "Mensaje",
+	signature: "Firma",
 	_active: "Activo",
 	_alwaysTop: "Siempre arriba",
+};
+
+// Valores fijos para claves que se editan con un <select> en vez de un texto.
+const selectOptions = {
+	effect: [
+		["fade", "Fundido"],
+		["slide", "Deslizar"],
+		["zoom", "Acercar"],
+		["none", "Ninguno"],
+	],
 };
 
 // ---- Control segmentado OFF | ON ----
@@ -258,7 +270,8 @@ function renderConfig(name, config) {
 
 	const badge = document.createElement("span");
 	badge.className = "badge " + (config._active ? "on" : "off");
-	badge.textContent = config._active ? "Activo" : "Inactivo";
+	badge.title = config._active ? "Activo" : "Inactivo";
+	badge.setAttribute("aria-label", config._active ? "Activo" : "Inactivo");
 
 	header.append(icon, title, badge);
 	area.appendChild(header);
@@ -268,7 +281,7 @@ function renderConfig(name, config) {
 
 	Object.entries(config).forEach(([key, value]) => {
 		const k = key.toLowerCase();
-		if (k.startsWith("_comment") || k === "comentario" || k === "comment" || key === "fullscreen" || key === "lat" || key === "lon" || key === "city") {
+		if (k.startsWith("_comment") || k === "comentario" || k === "comment" || key === "fullscreen" || key === "lat" || key === "lon" || key === "city" || key === "opened") {
 			return;
 		}
 
@@ -287,12 +300,53 @@ function renderConfig(name, config) {
 			input = seg.input;
 			input.id = "f_" + key;
 			control = seg.wrap;
+		} else if (selectOptions[key]) {
+			input = document.createElement("select");
+			input.id = "f_" + key;
+			selectOptions[key].forEach(([val, text]) => {
+				const opt = document.createElement("option");
+				opt.value = val;
+				opt.textContent = text;
+				input.appendChild(opt);
+			});
+			input.value = String(value);
+			control = input;
 		} else {
 			input = document.createElement("input");
 			input.id = "f_" + key;
 			input.type = typeof value === "number" ? "number" : "text";
 			input.value = value;
 			control = input;
+
+			if (key === "folder") {
+				const wrap = document.createElement("span");
+				wrap.className = "folder-wrap";
+
+				const browse = document.createElement("button");
+				browse.type = "button";
+				browse.className = "cfg-browse";
+				browse.title = "Examinar…";
+				browse.setAttribute("aria-label", "Examinar carpeta");
+				browse.innerHTML =
+					'<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="10.5" cy="10.5" r="6.5"/><line x1="15.5" y1="15.5" x2="20.5" y2="20.5"/></svg>';
+				browse.addEventListener("click", async () => {
+					browse.disabled = true;
+					try {
+						const dir = await invoke("pick_folder", { title: "Seleccionar carpeta" });
+						if (dir) {
+							input.value = dir;
+							input.dispatchEvent(new Event("change"));
+						}
+					} catch (err) {
+						console.error("No se pudo abrir el selector de carpetas:", err);
+					} finally {
+						browse.disabled = false;
+					}
+				});
+
+				wrap.append(input, browse);
+				control = wrap;
+			}
 		}
 
 		input.dataset.key = key;
@@ -313,7 +367,8 @@ function renderConfig(name, config) {
 
 			if (key === "_active") {
 				badge.className = "badge " + (input.checked ? "on" : "off");
-				badge.textContent = input.checked ? "Activo" : "Inactivo";
+				badge.title = input.checked ? "Activo" : "Inactivo";
+				badge.setAttribute("aria-label", input.checked ? "Activo" : "Inactivo");
 				setActive(name, input.checked);
 			}
 		});

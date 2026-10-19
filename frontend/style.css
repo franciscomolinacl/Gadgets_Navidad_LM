@@ -409,26 +409,24 @@ body::after {
 }
 
 .badge {
+	width: 13px;
+	height: 13px;
 	margin-left: auto;
-	padding: 6px 12px;
-	font-size: 0.68rem;
-	font-weight: 600;
-	letter-spacing: 1.6px;
-	text-transform: uppercase;
+	flex-shrink: 0;
 	border: 1px solid;
-	border-radius: 999px;
+	border-radius: 50%;
 }
 
 .badge.on {
-	color: #bff3d3;
-	border-color: rgba(63, 174, 106, 0.6);
-	background: rgba(63, 174, 106, 0.14);
+	border-color: rgba(63, 174, 106, 0.85);
+	background: #3fae6a;
+	box-shadow: 0 0 8px rgba(63, 174, 106, 0.55);
 }
 
 .badge.off {
-	color: #f3c3bd;
-	border-color: rgba(192, 57, 43, 0.5);
-	background: rgba(192, 57, 43, 0.12);
+	border-color: rgba(192, 57, 43, 0.75);
+	background: #c0392b;
+	box-shadow: 0 0 8px rgba(192, 57, 43, 0.45);
 }
 
 .config-form {
@@ -463,7 +461,8 @@ body::after {
 }
 
 .cfg-row input[type="number"],
-.cfg-row input[type="text"] {
+.cfg-row input[type="text"],
+.cfg-row select {
 	width: 132px;
 	padding: 8px 10px;
 	font-family: inherit;
@@ -478,9 +477,67 @@ body::after {
 }
 
 .cfg-row input[type="number"]:focus,
-.cfg-row input[type="text"]:focus {
+.cfg-row input[type="text"]:focus,
+.cfg-row select:focus {
 	border-color: var(--gold);
 	box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.14);
+}
+
+.cfg-row select {
+	-webkit-appearance: none;
+	appearance: none;
+	padding-right: 30px;
+	cursor: pointer;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23e8e4d8' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 10px center;
+}
+
+.cfg-row select option {
+	background: #1c1a15;
+	color: var(--text);
+}
+
+.folder-wrap {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	flex-shrink: 0;
+}
+
+.folder-wrap input[type="text"] {
+	width: 148px;
+	text-align: left;
+}
+
+.cfg-browse {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	flex-shrink: 0;
+	padding: 0;
+	color: var(--text);
+	background: rgba(0, 0, 0, 0.3);
+	border: 1px solid rgba(255, 255, 255, 0.12);
+	border-radius: 9px;
+	cursor: pointer;
+	transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+
+.cfg-browse svg {
+	display: block;
+}
+
+.cfg-browse:hover {
+	background: rgba(212, 175, 55, 0.12);
+	border-color: rgba(212, 175, 55, 0.45);
+}
+
+.cfg-browse:disabled {
+	opacity: 0.6;
+	cursor: wait;
 }
 
 /* ---- Segmentado OFF | ON ---- */
