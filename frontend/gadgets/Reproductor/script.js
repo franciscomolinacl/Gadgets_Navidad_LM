@@ -1,4 +1,7 @@
 const invoke = window.__TAURI__.core.invoke;
+const listen =
+	(window.__TAURI__ && window.__TAURI__.event && window.__TAURI__.event.listen) ||
+	(() => Promise.resolve(() => {}));
 
 const coverEl = document.getElementById('cover');
 const songNameEl = document.getElementById('song-name');
@@ -14,6 +17,7 @@ const nextBtn = document.getElementById('nextBtn');
 const randomBtn = document.getElementById('randomBtn');
 const playlistEl = document.getElementById('playlist');
 
+let cfg = {};
 let playlist = [];
 let currentIndex = 0;
 let audio = null;
@@ -23,7 +27,20 @@ let lastVolume = 1;
 const imageExtensions = ['.jpg', '.jpeg', '.png'];
 
 function songLabel(file) {
-	return decodeURIComponent(file).replace(/\.[a-z0-9]+$/i, '');
+	return decodeURIComponent(file).split('/').pop().replace(/\.[a-z0-9]+$/i, '');
+}
+
+function isExternal(file) {
+	return file.startsWith('/');
+}
+
+function dataUriToBlob(dataUri) {
+	const comma = dataUri.indexOf(',');
+	const mime = dataUri.slice(5, dataUri.indexOf(';'));
+	const bin = atob(dataUri.slice(comma + 1));
+	const bytes = new Uint8Array(bin.length);
+	for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+	return new Blob([bytes], { type: mime });
 }
 
 function updatePlaylistHighlight() {
@@ -82,7 +99,17 @@ function render() {
 
 // El backend GStreamer de WebKitGTK no puede reproducir el esquema custom
 // "tauri://", asi que el archivo se resuelve a un blob URL via fetch.
+// Para rutas externas el backend entrega un data URI que se convierte a Blob.
 async function resolveSrc(file) {
+	if (isExternal(file)) {
+		try {
+			const dataUri = await invoke('media_file_data_uri', { path: file });
+			return URL.createObjectURL(dataUriToBlob(dataUri));
+		} catch (e) {
+			console.error('No se pudo leer el archivo:', file, e);
+			return '';
+		}
+	}
 	const url = encodeURI(file);
 	try {
 		const res = await fetch(url);
@@ -97,6 +124,7 @@ async function loadSong(index) {
 	const file = playlist[index];
 	if (!file) return;
 	const src = await resolveSrc(file);
+	if (!src) return;
 	if (audio.__blobUrl) URL.revokeObjectURL(audio.__blobUrl);
 	audio.__blobUrl = src.startsWith('blob:') ? src : null;
 	audio.src = src;
@@ -150,27 +178,67 @@ function bindControls() {
 	};
 }
 
+async function loadLibrary() {
+	cfg = await invoke('load_gadget_config', { name: 'Reproductor' });
+	window.__marqueeSpeed = cfg.marqueeSpeed || 50;
+
+	const files = await invoke('gadget_media_files', {
+		name: 'Reproductor',
+		subfolder: cfg.folder || 'musica',
+	});
+	playlist = files.filter((f) => f.toLowerCase().endsWith('.mp3'));
+
+	const cover = files.find((f) => imageExtensions.some((ext) => f.toLowerCase().endsWith(ext)));
+	if (cover) {
+		coverEl.src = isExternal(cover)
+			? await invoke('media_file_data_uri', { path: cover }).catch(() => 'icon.png')
+			: encodeURI(cover);
+	} else {
+		coverEl.src = 'icon.png';
+	}
+
+	renderPlaylist();
+	if (playlist.length > 0) {
+		if (currentIndex >= playlist.length) currentIndex = 0;
+		await loadSong(currentIndex);
+	} else {
+		songNameEl.textContent = '';
+	}
+}
+
 async function init() {
 	try {
-		const cfg = await invoke('load_gadget_config', { name: 'Reproductor' });
-		const folder = cfg.folder || 'musica';
-		window.__marqueeSpeed = cfg.marqueeSpeed || 50;
-
-		const files = await invoke('gadget_media_files', { name: 'Reproductor', subfolder: folder });
-		playlist = files.filter((f) => f.toLowerCase().endsWith('.mp3'));
-
-		const cover = files.find((f) => imageExtensions.some((ext) => f.toLowerCase().endsWith(ext)));
-		coverEl.src = cover ? encodeURI(cover) : 'icon.png';
-
 		audio = new Audio();
 		setupVisualizer();
 		render();
 		bindControls();
-		renderPlaylist();
-		if (playlist.length > 0) loadSong(currentIndex);
+		await loadLibrary();
 	} catch (e) {
 		console.error('No se pudo inicializar el reproductor:', e);
 	}
 }
+
+listen('gadget:config-saved', async (event) => {
+	const { name, config } = event.payload || {};
+	if (name !== 'Reproductor' || !config) return;
+	try {
+		const folderChanged = (config.folder || 'musica') !== (cfg.folder || 'musica');
+		const speedChanged = (config.marqueeSpeed || 50) !== (window.__marqueeSpeed || 50);
+		if (folderChanged) {
+			const wasPlaying = audio && !audio.paused;
+			await loadLibrary();
+			if (wasPlaying && playlist.length) {
+				try { audioCtx.resume(); } catch (e) {}
+				const p = audio.play();
+				if (p && p.catch) p.catch(() => {});
+			}
+		} else if (speedChanged) {
+			window.__marqueeSpeed = config.marqueeSpeed || 50;
+			songNameEl.style.animationDuration = window.__marqueeSpeed + 's';
+		}
+	} catch (e) {
+		console.error('No se pudo recargar la configuración:', e);
+	}
+});
 
 init();

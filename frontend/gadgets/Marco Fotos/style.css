@@ -24,10 +24,32 @@ body {
 	max-height: 100%;
 	object-fit: contain;
 	position: absolute;
-	transition: opacity 1s ease;
+	transition: opacity 1s ease, transform 1s ease;
 	opacity: 0;
+	transform: none;
 }
 
 #frame img.active {
 	opacity: 1;
+	transform: none;
+}
+
+#frame[data-effect="slide"] img {
+	transform: translateX(60px);
+}
+
+#frame[data-effect="slide"] img.active {
+	transform: translateX(0);
+}
+
+#frame[data-effect="zoom"] img {
+	transform: scale(1.25);
+}
+
+#frame[data-effect="zoom"] img.active {
+	transform: scale(1);
+}
+
+#frame[data-effect="none"] img {
+	transition: none;
 }
