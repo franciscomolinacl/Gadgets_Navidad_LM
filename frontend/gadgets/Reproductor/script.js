@@ -21,7 +21,7 @@ let cfg = {};
 let playlist = [];
 let currentIndex = 0;
 let audio = null;
-let audioCtx, source, analyser, dataArray, bars;
+let bars;
 let lastVolume = 1;
 
 const imageExtensions = ['.jpg', '.jpeg', '.png'];
@@ -73,27 +73,22 @@ function renderPlaylist() {
 	});
 }
 
+// El Web Audio de WebKitGTK (createMediaElementSource) deja el elemento mudo:
+// reproduce sin error pero sin salida audible. Por eso el visualizador es
+// decorativo y NO se enruta el audio por un AudioContext.
 function setupVisualizer() {
-	audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-	source = audioCtx.createMediaElementSource(audio);
-	analyser = audioCtx.createAnalyser();
-	source.connect(analyser);
-	analyser.connect(audioCtx.destination);
-	analyser.fftSize = 64;
-	const bufferLength = analyser.frequencyBinCount;
-	dataArray = new Uint8Array(bufferLength);
-	for (let i = 0; i < bufferLength; i++) {
-		visualizerEl.appendChild(document.createElement('div'));
-	}
+	for (let i = 0; i < 32; i++) visualizerEl.appendChild(document.createElement('div'));
 	bars = Array.from(visualizerEl.children);
 }
 
 function render() {
 	requestAnimationFrame(render);
-	if (!analyser) return;
-	analyser.getByteFrequencyData(dataArray);
+	if (!bars) return;
+	const t = Date.now() / 260;
+	const active = audio && !audio.paused;
 	bars.forEach((bar, i) => {
-		bar.style.height = (dataArray[i] / 255 * 100) + '%';
+		const wave = Math.abs(Math.sin(t + i * 0.55)) * Math.abs(Math.sin(t * 0.37 + i));
+		bar.style.height = (active ? 12 + wave * 78 : 6) + '%';
 	});
 }
 
@@ -138,7 +133,6 @@ async function goTo(index, autoplay) {
 	currentIndex = index;
 	await loadSong(currentIndex);
 	if (autoplay) {
-		try { audioCtx.resume(); } catch (e) {}
 		const p = audio.play();
 		if (p && p.catch) p.catch(() => {});
 	}
@@ -147,7 +141,6 @@ async function goTo(index, autoplay) {
 function bindControls() {
 	playBtn.onclick = () => {
 		if (!audio.src) return;
-		try { audioCtx.resume(); } catch (e) {}
 		const p = audio.play();
 		if (p && p.catch) p.catch(() => {});
 	};
@@ -228,7 +221,6 @@ listen('gadget:config-saved', async (event) => {
 			const wasPlaying = audio && !audio.paused;
 			await loadLibrary();
 			if (wasPlaying && playlist.length) {
-				try { audioCtx.resume(); } catch (e) {}
 				const p = audio.play();
 				if (p && p.catch) p.catch(() => {});
 			}

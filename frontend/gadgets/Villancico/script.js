@@ -13,7 +13,7 @@ async function loadVillancico() {
 		const files = await invoke('gadget_media_files', { name: 'Villancico', subfolder: null });
 		const mp3 = files.find((f) => f.toLowerCase().endsWith('.mp3'));
 		if (mp3 && audio) {
-			audio.src = encodeURI(mp3);
+			audio.src = await resolveSrc(mp3);
 			title.textContent = decodeURIComponent(mp3).replace(/\.mp3$/i, '') + ' 🎵';
 		} else {
 			title.textContent = 'Sin villancico 🎵';
@@ -21,6 +21,19 @@ async function loadVillancico() {
 	} catch (e) {
 		console.error('No se pudo cargar el villancico:', e);
 		title.textContent = 'Sin villancico 🎵';
+	}
+}
+
+// GStreamer (backend de WebKitGTK) no reproduce el esquema custom "tauri://",
+// asi que el archivo se resuelve a un blob URL via fetch.
+async function resolveSrc(file) {
+	const url = encodeURI(file);
+	try {
+		const res = await fetch(url);
+		const blob = await res.blob();
+		return URL.createObjectURL(blob);
+	} catch (e) {
+		return url;
 	}
 }
 
