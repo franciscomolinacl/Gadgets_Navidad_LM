@@ -569,3 +569,74 @@ bordes. Alternativa (no aplicada): fijar tamaño con
   `JavaScriptCore` 4.1 -> `ctx.check_syntax(src, -1, CheckSyntaxMode.SCRIPT, uri, 1)`.
 - Verificacion visual real: capturar la ventana con Xlib `win.get_image` +
   PIL y **abrir el PNG** (permite revisar el render sin adivinar por pixeles).
+
+## PENDIENTE: el audio no suena dentro de la app (2026-10-18)
+
+**Estado: sin resolver. Se retoma manana.** No tocar nada mas de audio hasta
+cerrar el diagnostico.
+
+### Sintoma
+Ningun gadget reproduce audio en la app (Reproductor y Villancico). Falla tanto
+el binario de release (`src-tauri/target/release/gadgets-navidenos-tauri`) como
+el AppImage. En modo plan solo se diagnostico (lectura).
+
+### Descartado (comprobado)
+- **Audio del sistema OK**: sink PipeWire `alsa_output.pci-0000_00_05.0.analog-stereo`
+  activo, sin mute, volumen 40%. Tarjeta ALSA `Intel 82801AA-ICH`.
+- **El MP3 esta bien**: el villancico suena al reproducirlo por fuera (y YouTube
+  suena en Firefox) -> no es el archivo ni la VM/host.
+- **GStreamer OK**: decoder `mpg123` presente y sinks `autoaudiosink`/`pulsesink`/
+  `pipewiresink`/`alsasink` disponibles; el registry de WebKit se actualiza al
+  correr la app (si carga plugins).
+- **No es autoplay por diseno**: wry 0.57 trae `autoplay: true` por defecto y en
+  WebKitGTK hace `AutoplayPolicy::Allow`
+  (`~/.cargo/registry/.../wry-0.57.0/src/webkitgtk/mod.rs:403`).
+- **El clic si se ejecuta**: al pulsar Play en Villancico aparecen las notas
+  flotando (el handler corre) pero no se oye nada.
+- **No es rutas/empaquetado**: release y AppImage fallan igual (AppImage ya trae
+  GStreamer con `bundleMediaFramework: true`).
+
+### Bug confirmado (aparte, seguro)
+- Villancico usa `audio.src = encodeURI(mp3)` (`frontend/gadgets/Villancico/script.js:16`)
+  con la ruta relativa -> URL del **esquema interno de Tauri** que GStreamer no
+  reproduce. Hay que pasarlo a `fetch -> blob -> objectURL` como el Reproductor
+  (o `media_file_data_uri`). Esto es independiente del resto.
+
+### Traga-errores que oculta la causa
+- Reproductor: `setupVisualizer()` crea `AudioContext` + `createMediaElementSource`
+  y `audio.play().catch(()=>{})` (`script.js:76-95` y `141-153`); cualquier
+  rechazo (o un `AudioContext` en `suspended`) queda invisible.
+- Villancico: mismo patron de `catch` silencioso.
+
+### Hipotesis vivas (con su prueba discriminante)
+1. **Sandbox de WebKitGTK** (existe `/usr/bin/bwrap`): el proceso de media no
+   accede al socket de PipeWire -> silencio sin error.
+   Prueba: lanzar con `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1`.
+2. **Activacion/foco**: las ventanas se crean con `.focused(false)`
+   (`src/main.rs:347`) y hubo lios de foco -> WebKit podria no contar el clic
+   como activacion. Prueba: capturar el error real de `play()`.
+3. **Pipeline de media de WebKitGTK roto en esta VM** (VMware sin 3D, ventana
+   `transparent(true)`). Prueba: aislar con WebKitGTK puro.
+
+### Plan de diagnostico (retomar manana, en Build)
+1. Exponer el error real (temporal, sin commitear): loguear `await audio.play()`
+   (exito/rechazo y nombre), `audio.error`, `audioCtx?.state`, `document.hasFocus()`.
+   - `NotAllowedError` -> hipotesis 2. Mudo sin error -> 1 o 3.
+     `NotSupportedError` -> esquema (bug de Villancico).
+2. Lanzar con `WEBKIT_DISABLE_SANDBOX_THIS_IS_DANGEROUS=1` y probar. Si suena -> 1.
+3. Lanzar con `GST_DEBUG=4 WEBKIT_DEBUG=Media=all` y buscar errores de sink/decoder.
+4. Aislar WebKitGTK del codigo: script Python (`gi` webkit2) que cargue un HTML
+   local con `<audio controls autoplay>` apuntando al MP3. Si tampoco suena, el
+   problema es WebKitGTK/entorno, no la app.
+5. Arreglar Villancico (`fetch -> blob`) aparte.
+6. Decidir arreglo segun resultado (env de sandbox / foco / cambiar enfoque de audio).
+
+### Entorno util
+- WebKitGTK 2.52.6. `~/.cache/gstreamer-1.0/registry.x86_64.bin` se regenera al correr.
+- Material de audio: `frontend/gadgets/Villancico/Jingle Bells Rock.mp3`.
+
+### Fixes ya aplicados y verificados (mismo dia, aparte del audio)
+- 4 mejoras del panel: select Efecto legible, boton lupa 36x36, badge circular
+  verde/rojo, labels Mensaje/Firma y canal `opened` oculto.
+- AppImage empaquetado **con** GStreamer (`bundleMediaFramework: true`) e
+  `patchelf` estatico en `~/.local/bin/patchelf` (prefixar PATH al empaquetar).
