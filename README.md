@@ -8,6 +8,8 @@ Incluye **36 gadgets** (árboles, luces, nieve, cuenta atrás, relojes, clima,
 reproductor de música, marco de fotos, notas, etc.) que se colocan libremente
 sobre el escritorio, más un **panel de control** con bandeja del sistema.
 
+![Gadgets Navideños en el escritorio](docs/screenshots/escritorio.webp)
+
 ## Características
 
 - 36 gadgets independientes, cada uno en su propia ventana sin bordes y
@@ -19,6 +21,13 @@ sobre el escritorio, más un **panel de control** con bandeja del sistema.
 - Arranque automático al iniciar sesión (opcional).
 - Audio (reproductor y villancico) servido por un HTTP local con soporte de
   `Range`, porque WebKitGTK no reproduce audio desde esquemas custom.
+
+### Algunos gadgets
+
+| | |
+|:--:|:--:|
+| ![Árbol](docs/screenshots/arbol.webp) | ![Reproductor](docs/screenshots/reproductor.webp) |
+| ![El tiempo](docs/screenshots/el-tiempo.webp) | ![Panel de control](docs/screenshots/panel.webp) |
 
 ## Descarga e instalación
 
