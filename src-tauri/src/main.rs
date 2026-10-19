@@ -648,6 +648,13 @@ fn save_gadget_config(app: AppHandle, name: String, config: serde_json::Value) -
             let _ = win.destroy();
         }
     }
+
+    // Los gadgets (y el panel) escuchan este evento para recargar en caliente
+    // sin reiniciar la ventana (folder, intervalo, efecto, etc.).
+    let _ = app.emit(
+        "gadget:config-saved",
+        serde_json::json!({ "name": name, "config": merged }),
+    );
     refresh_tray(&app);
     Ok(())
 }
@@ -726,7 +733,103 @@ fn sticky_save(text: String) {
 
 #[tauri::command]
 fn gadget_media_files(name: String, subfolder: Option<String>) -> Vec<String> {
-    config::gadget_media(&name, subfolder.as_deref())
+    let sub = subfolder.unwrap_or_default();
+    if sub.starts_with('/') {
+        let mut out = Vec::new();
+        list_external_media(std::path::Path::new(&sub), 0, &mut out);
+        out.sort();
+        return out;
+    }
+    config::gadget_media(&name, if sub.is_empty() { None } else { Some(sub.as_str()) })
+}
+
+fn is_media_name(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    lower.ends_with(".mp3")
+        || lower.ends_with(".jpg")
+        || lower.ends_with(".jpeg")
+        || lower.ends_with(".png")
+        || lower.ends_with(".gif")
+        || lower.ends_with(".webp")
+}
+
+/// Lee un directorio externo (ruta absoluta elegida por el usuario) buscando
+/// archivos multimedia. Limita profundidad y cantidad para no recorrer nada
+/// desmesurado si el usuario apunta a un directorio enorme.
+fn list_external_media(dir: &std::path::Path, depth: u32, out: &mut Vec<String>) {
+    if depth > 6 || out.len() >= 1000 {
+        return;
+    }
+    let Ok(read) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in read.flatten() {
+        if out.len() >= 1000 {
+            break;
+        }
+        let path = entry.path();
+        if path.is_dir() {
+            list_external_media(&path, depth + 1, out);
+        } else if path.is_file() {
+            if let Some(fname) = path.file_name().and_then(|f| f.to_str()) {
+                if is_media_name(fname) {
+                    out.push(path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+}
+
+/// Sirve un archivo multimedia externo como data URI (base64) para que el
+/// webview pueda cargarlo sin asset protocol. Solo extensiones multimedia.
+#[tauri::command]
+fn media_file_data_uri(path: String) -> Result<String, String> {
+    let p = std::path::Path::new(&path);
+    if !p.is_absolute() {
+        return Err("la ruta debe ser absoluta".to_string());
+    }
+    let ext = p
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    let mime = match ext.as_str() {
+        "mp3" => "audio/mpeg",
+        "jpg" | "jpeg" => "image/jpeg",
+        "png" => "image/png",
+        "gif" => "image/gif",
+        "webp" => "image/webp",
+        _ => return Err(format!("extensión no soportada: {ext}")),
+    };
+    let data = std::fs::read(p).map_err(|e| format!("No se pudo leer el archivo: {e}"))?;
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    Ok(format!("data:{mime};base64,{}", STANDARD.encode(&data)))
+}
+
+/// Abre zenity para elegir un directorio. Devuelve None si el usuario
+/// cancela. Se ejecuta en un hilo bloqueante para no congelar la UI.
+#[tauri::command]
+async fn pick_folder(title: Option<String>) -> Result<Option<String>, String> {
+    let title = title.unwrap_or_else(|| "Seleccionar carpeta".to_string());
+    tauri::async_runtime::spawn_blocking(move || {
+        let out = std::process::Command::new("zenity")
+            .args(["--file-selection", "--directory", "--title", &title])
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .output()
+            .map_err(|e| format!("No se pudo ejecutar zenity: {e}"))?;
+        if !out.status.success() {
+            return Ok(None);
+        }
+        let path = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if path.is_empty() {
+            Ok(None)
+        } else {
+            Ok(Some(path))
+        }
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -835,6 +938,8 @@ fn main() {
             sticky_save,
             window_close,
             gadget_media_files,
+            media_file_data_uri,
+            pick_folder,
             favorites_get,
             favorites_set,
             perfiles_list,
