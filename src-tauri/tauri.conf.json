@@ -17,6 +17,11 @@
     "category": "Utility",
     "publisher": "Francisco Molina",
     "copyright": "MIT",
-    "shortDescription": "Gadgets navideños para el escritorio"
+    "shortDescription": "Gadgets navideños para el escritorio",
+    "linux": {
+      "appimage": {
+        "bundleMediaFramework": true
+      }
+    }
   }
 }
