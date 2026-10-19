@@ -515,3 +515,57 @@ bordes. Alternativa (no aplicada): fijar tamaño con
   de la bandeja y `CloseRequested` escriben el estado; `show_panel` pone true).
 - Verificacion: `xwininfo -root -tree` tras relanzar con `panel_visible:false`
   no muestra "Panel de Control" pero si el gadget activo (Globo de Nieve).
+
+## Carpetas externas, select nativo y detalles de UI (2026-10-18)
+
+### Rutas multimedia externas (fuera del bundle)
+- Los gadgets traian solo medios embebidos (`config::gadget_media`). Se permitio
+  elegir una **carpeta externa** (ruta absoluta) desde el panel.
+- `gadget_media_files` ahora detecta `subfolder.starts_with('/')` y usa
+  `list_external_media` (recursivo, profundidad <= 6, tope 1000 archivos) en vez
+  del listado embebido. `is_media_name` filtra mp3/jpg/jpeg/png/gif/webp.
+- **Servir el archivo al webview**: el asset protocol y los esquemas custom
+  fallan con WebKitGTK/GStreamer. Solucion: comando `media_file_data_uri` que lee
+  el archivo y devuelve `data:<mime>;base64,...` (crate `base64`, API
+  `general_purpose::STANDARD`). El gadget convierte ese data URI a `Blob` y de ahi
+  a `URL.createObjectURL` (audio) o lo usa directo en `img.src` (imagenes).
+- `pick_folder` es `async` + `tauri::async_runtime::spawn_blocking` ejecutando
+  `zenity --file-selection --directory` (sin dependencias Cargo nuevas; cancelar
+  = exit != 0 -> `Ok(None)`).
+
+### Recarga en caliente sin re-render del panel
+- El drag de un gadget ya emite `gadget:config-changed` con debounce, y el panel
+  escucha ese evento para re-renderizar el formulario (`control.js`). Si
+  `save_gadget_config` emitiera lo mismo, cada guardado re-armaria el form y
+  perderia el foco/scroll.
+- Solucion: `save_gadget_config` emite un evento **distinto**
+  `gadget:config-saved` con `{name, config}`. Los gadgets lo escuchan y recargan
+  solo si cambio un campo relevante (comparando con su cfg actual), asi no
+  recargan imagenes/canciones al mover la ventana.
+
+### Select nativo en WebKitGTK
+- El `<select>` con estilo propio mostraba el **valor seleccionado en blanco
+  sobre fondo claro** (el texto solo se veia al abrirlo). Causa: el control
+  nativo ignora `color`/`background` en estado cerrado.
+- Solucion: `appearance: none; -webkit-appearance: none;` + fondo propio +
+  flecha como `background-image` con un SVG inline en data URI (ojo: en la URL
+  codificar `#` como `%23`).
+
+### Detalles de UI del panel
+- Boton "Examinar…" con texto desbordaba el borde de la fila. Reemplazado por un
+  **icono de lupa** (SVG inline 16x16) en boton cuadrado 36x36 con
+  `display:inline-flex; align-items:center; justify-content:center`.
+- El badge de estado del titulo ("Activo"/"Inactivo") se salia del borde con
+  nombres largos. Reemplazado por un **circulo** de 13px verde/rojo
+  (`title`/`aria-label` conservan el texto para accesibilidad).
+
+### Verificacion (dos tecnicas utiles)
+- **Comprobar que el frontend quedo embebido** tras `cargo build`: los assets
+  viven en `target/debug/build/gadgets-navidenos-tauri-*/out/tauri-codegen-assets/`
+  y estan comprimidos con **brotli** (NO buscar magic "BR": el stream brotli no
+  tiene cabecera; descomprimir directo con `brotli.decompress`). Buscar ahi las
+  cadenas CSS/JS confirma el re-embed.
+- **Validar sintaxis JS sin node** (no hay node en el equipo): usar PyGObject
+  `JavaScriptCore` 4.1 -> `ctx.check_syntax(src, -1, CheckSyntaxMode.SCRIPT, uri, 1)`.
+- Verificacion visual real: capturar la ventana con Xlib `win.get_image` +
+  PIL y **abrir el PNG** (permite revisar el render sin adivinar por pixeles).
